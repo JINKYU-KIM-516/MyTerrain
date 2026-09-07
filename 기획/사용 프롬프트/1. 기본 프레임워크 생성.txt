@@ -1,0 +1,21 @@
+#질문
+directx 이용한 게임 프레임워크 만들기
+버전은 dx11 을 기준으로 하며 기본 unity 엔진처럼 gameobject 를 이용하고 gameobject에 component 를 등록 하면서 각 등록한 컴포넌트등을 start, update, render, destroy 등 기본 클래스가 적용이 되도록 구성 해줘
+gameobject 를 기본 생성하면 gameobject안에 transform 클래스 내부 컴포넌트에 있도록 만들어줘
+기본적인 파란 화면까지 띄울수 있도록 적용하며 마우스입력, 키보드 입력도 받을수 있도록 만들어줘
+
+#답장
+DirectX 11 게임 프레임워크를 만들어서 MyTerrain 폴더에 Visual Studio 프로젝트로 저장했습니다.
+
+구조
+
+GameObject — 생성 시 Transform 컴포넌트가 자동으로 붙습니다. AddComponent<T>() / GetComponent<T>() 템플릿으로 원하는 컴포넌트를 붙이고 조회할 수 있습니다.
+Component — 기반 클래스로 Start() / Update(deltaTime) / Render() / Destroy() 가상 함수를 제공하며, GameObject가 매 프레임 이 순서로 호출해줍니다.
+Transform — 위치/회전(오일러)/스케일과 부모-자식 계층, 월드 행렬 계산을 담당합니다.
+Scene — GameObject들을 관리하며 Start/Update/Render를 진행하고, MarkForDestroy()된 오브젝트는 프레임 끝(LateUpdate)에 정리합니다.
+Framework — Window + D3D11Renderer + Time + Scene을 소유하는 최상위 클래스로, Initialize → Run → Shutdown 순서로 사용합니다.
+D3DRenderer — 디바이스/스왑체인/렌더타겟/뎁스버퍼를 생성하고 매 프레임 화면을 파란색(기본값)으로 클리어합니다. 창 크기 변경 시 자동으로 리사이즈됩니다.
+InputManager — 싱글턴으로, Window의 WndProc에서 전달받은 메시지로 키보드(Down/Pressed/Released)와 마우스(버튼, 위치, 이동량, 휠) 상태를 추적합니다.
+DemoInputComponent — WASD/방향키 이동, 좌클릭 드래그 회전, Start/Destroy 로그 출력을 보여주는 예제 컴포넌트로 main.cpp에서 사용법을 확인할 수 있습니다.
+
+Visual Studio 2022(x64, C++17, DX11 라이브러리 링크)용 .sln/.vcxproj도 함께 생성했으니 MyTerrain 폴더에서 MyTerrain.sln을 열어 바로 빌드하시면 됩니다. 앞으로 만들 지형 기능들(펄린 노이즈, 쿼드트리 컬링, LOD 등)은 이 위에 새 Component(예: TerrainComponent)로 추가하면 됩니다.
