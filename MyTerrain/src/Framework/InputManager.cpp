@@ -1,4 +1,4 @@
-#include "InputManager.h"
+﻿#include "InputManager.h"
 #include <windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
 
 InputManager& InputManager::GetInstance()

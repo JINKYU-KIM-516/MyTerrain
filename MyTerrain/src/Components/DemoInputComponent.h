@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../GameObject/Component.h"
 
 // 프레임워크 동작 확인용 예제 컴포넌트.

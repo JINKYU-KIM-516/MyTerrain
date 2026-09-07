@@ -1,4 +1,4 @@
-#include "D3DRenderer.h"
+﻿#include "D3DRenderer.h"
 #include <cassert>
 
 bool D3DRenderer::Initialize(HWND hwnd, UINT width, UINT height)

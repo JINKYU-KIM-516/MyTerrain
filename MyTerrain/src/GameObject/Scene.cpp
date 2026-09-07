@@ -1,4 +1,4 @@
-#include "Scene.h"
+﻿#include "Scene.h"
 #include <algorithm>
 
 GameObject* Scene::CreateGameObject(const std::string& name)

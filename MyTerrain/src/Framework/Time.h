@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 
 // 게임 루프의 델타타임 / 총 경과시간을 관리하는 클래스
