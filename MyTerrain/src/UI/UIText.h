@@ -12,7 +12,10 @@ enum class UIAnchor
     TopLeft,      // 왼쪽 상단
     TopCenter,    // 상단 중앙 (가로 중앙 정렬)
     TopRight,     // 오른쪽 상단
-    Center        // 화면 정중앙
+    Center,       // 화면 정중앙
+    BottomLeft,   // 왼쪽 하단
+    BottomCenter, // 하단 중앙
+    BottomRight   // 오른쪽 하단
 };
 
 // 화면에 텍스트 한 줄을 그리는 UI 컴포넌트.

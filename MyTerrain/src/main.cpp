@@ -2,6 +2,7 @@
 #include "Framework/Framework.h"
 #include "App/ShowcaseApp.h"
 #include "App/Techniques/Technique00_MenuTest.h"
+#include "App/Techniques/Technique01_FlatGrid.h"
 
 // ------------------------------------------------------------
 // Terrain Showcase System - 진입점
@@ -46,7 +47,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
     // ---- 기법 등록 (등록 순서대로 0번부터 번호가 매겨진다) ----
     app.RegisterTechnique(L"메뉴 구현 테스트", L"Menu Test", &BuildMenuTestScene);
-    // app.RegisterTechnique(L"기본 평면 그리드", L"Flat Grid", &BuildFlatGridScene);
+    app.RegisterTechnique(L"기본 평면 그리드", L"Basic Flat Grid", &BuildFlatGridScene);
     // app.RegisterTechnique(L"펄린 노이즈 지형", L"Perlin Noise Terrain", &BuildPerlinNoiseScene);
     // ...
 

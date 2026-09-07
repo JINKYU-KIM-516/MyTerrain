@@ -22,6 +22,12 @@
     <Filter Include="App\Techniques">
       <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000007}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Terrain">
+      <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000009}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 
   <ItemGroup>
@@ -71,6 +77,27 @@
       <Filter>App</Filter>
     </ClCompile>
     <ClCompile Include="src\App\Techniques\Technique00_MenuTest.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Framework\Camera.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Framework\ShaderUtil.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\FreeCameraController.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\GridControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Terrain\GridMesh.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Terrain\TerrainRenderer.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique01_FlatGrid.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
   </ItemGroup>
@@ -124,5 +151,32 @@
     <ClInclude Include="src\App\Techniques\Technique00_MenuTest.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
+    <ClInclude Include="src\Framework\Camera.h">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Framework\ShaderUtil.h">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\FreeCameraController.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\GridControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\GridMesh.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\TerrainRenderer.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique01_FlatGrid.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="shaders\BasicTerrain.hlsl">
+      <Filter>shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

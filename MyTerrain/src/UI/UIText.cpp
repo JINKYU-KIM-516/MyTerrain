@@ -115,6 +115,22 @@ void UIText::RefreshLayout()
         left = (screenWidth - m_textWidth) * 0.5f + m_offsetX;
         top = (screenHeight - m_textHeight) * 0.5f + m_offsetY;
         break;
+
+    // 아래쪽 앵커는 오프셋 Y를 "화면 아래쪽 끝에서 떨어진 여백"으로 해석한다
+    case UIAnchor::BottomLeft:
+        left = m_offsetX;
+        top = screenHeight - m_textHeight - m_offsetY;
+        break;
+
+    case UIAnchor::BottomCenter:
+        left = (screenWidth - m_textWidth) * 0.5f + m_offsetX;
+        top = screenHeight - m_textHeight - m_offsetY;
+        break;
+
+    case UIAnchor::BottomRight:
+        left = screenWidth - m_textWidth - m_offsetX;
+        top = screenHeight - m_textHeight - m_offsetY;
+        break;
     }
 
     m_screenRect = D2D1::RectF(left, top, left + m_textWidth, top + m_textHeight);
