@@ -4,6 +4,7 @@
 #include "../Framework/ShaderUtil.h"
 #include "../GameObject/GameObject.h"
 #include <algorithm>
+#include <chrono>
 
 using namespace DirectX;
 
@@ -184,6 +185,10 @@ bool TerrainRenderer::RebuildMesh()
         return false;
     }
 
+    // 높이 함수 평가 + 정점/인덱스 생성 + GPU 업로드까지를 한 덩어리로 잰다.
+    // 분할 수나 옥타브를 올렸을 때 비용이 어떻게 늘어나는지 HUD 에서 바로 보인다.
+    const auto rebuildStart = std::chrono::steady_clock::now();
+
     const GridMesh::MeshData mesh = GridMesh::Generate(m_divisionsX, m_divisionsZ, m_cellSize, m_heightFunc);
 
     m_vertexCount = mesh.GetVertexCount();
@@ -218,6 +223,9 @@ bool TerrainRenderer::RebuildMesh()
     hr = device->CreateBuffer(&ibDesc, &ibData, &m_indexBuffer);
     if (FAILED(hr)) return false;
 
+    const auto rebuildEnd = std::chrono::steady_clock::now();
+    m_lastRebuildMs = std::chrono::duration<double, std::milli>(rebuildEnd - rebuildStart).count();
+
     m_meshDirty = false;
     return true;
 }
@@ -248,7 +256,7 @@ void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
 
     constants->useLighting = useLighting ? 1.0f : 0.0f;
     constants->cameraPosition = cameraPosition;
-    constants->cellSize = m_cellSize;
+    constants->cellSize = m_cellSize * m_checkerScale;
 
     context->Unmap(m_constantBuffer.Get(), 0);
 }

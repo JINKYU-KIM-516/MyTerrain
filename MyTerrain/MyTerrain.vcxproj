@@ -120,6 +120,9 @@
     <ClCompile Include="src\Terrain\GridMesh.cpp" />
     <ClCompile Include="src\Terrain\TerrainRenderer.cpp" />
     <ClCompile Include="src\App\Techniques\Technique01_FlatGrid.cpp" />
+    <ClCompile Include="src\Terrain\PerlinNoise.cpp" />
+    <ClCompile Include="src\Components\PerlinControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique02_PerlinNoise.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -146,6 +149,9 @@
     <ClInclude Include="src\Terrain\GridMesh.h" />
     <ClInclude Include="src\Terrain\TerrainRenderer.h" />
     <ClInclude Include="src\App\Techniques\Technique01_FlatGrid.h" />
+    <ClInclude Include="src\Terrain\PerlinNoise.h" />
+    <ClInclude Include="src\Components\PerlinControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique02_PerlinNoise.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로

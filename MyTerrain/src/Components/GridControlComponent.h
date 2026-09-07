@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "../GameObject/Component.h"
+#include <string>
 
 class TerrainRenderer;
 class UIText;
@@ -13,6 +14,9 @@ class UIText;
 //
 // 분할 수를 2배씩 바꾸는 이유는, 이후 LOD·쿼드트리 기법에서 다루기 좋은
 // 2의 거듭제곱 크기를 유지하기 위해서다.
+//
+// 기법마다 HUD 에 보여줄 내용이 다르므로 RefreshInfoText 는 virtual 로 열어두었다.
+// (2번 펄린 노이즈 지형의 PerlinControlComponent 가 이 클래스를 상속해서 쓴다)
 class GridControlComponent : public Component
 {
 public:
@@ -25,10 +29,14 @@ public:
     void SetDivisionRange(int minDivisions, int maxDivisions);
     void SetCellSizeRange(float minCellSize, float maxCellSize);
 
-private:
-    void RefreshInfoText();
+protected:
+    virtual void RefreshInfoText();
 
-private:
+    // 파생 클래스에서도 쓰는 숫자 -> 문자열 헬퍼
+    static std::wstring FormatThousands(size_t value);   // 1234567 -> "1,234,567"
+    static std::wstring FormatFixed(float value, int decimals);
+
+protected:
     TerrainRenderer* m_terrain = nullptr;
     UIText* m_infoText = nullptr;
 

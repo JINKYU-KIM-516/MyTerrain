@@ -100,6 +100,15 @@
     <ClCompile Include="src\App\Techniques\Technique01_FlatGrid.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\PerlinNoise.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\PerlinControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique02_PerlinNoise.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -170,6 +179,15 @@
       <Filter>Terrain</Filter>
     </ClInclude>
     <ClInclude Include="src\App\Techniques\Technique01_FlatGrid.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\PerlinNoise.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\PerlinControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique02_PerlinNoise.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
   </ItemGroup>

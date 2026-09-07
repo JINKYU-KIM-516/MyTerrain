@@ -39,6 +39,14 @@ public:
     void SetGrid(int divisionsX, int divisionsZ, float cellSize);
     void SetHeightFunction(const GridMesh::HeightFunc& heightFunc);
 
+    // 높이 함수 자체는 그대로지만 그 "안에서 참조하는 값"이 바뀌었을 때 사용한다.
+    // (예: 펄린 노이즈 파라미터 조절) 다음 렌더링 직전에 메시를 다시 만든다.
+    void RequestRebuild() { m_meshDirty = true; }
+    bool IsMeshDirty() const { return m_meshDirty; }
+
+    // 마지막 메시 재생성에 걸린 시간(밀리초). 파라미터별 비용을 눈으로 보기 위한 값이다.
+    double GetLastRebuildMilliseconds() const { return m_lastRebuildMs; }
+
     int   GetDivisionsX() const { return m_divisionsX; }
     int   GetDivisionsZ() const { return m_divisionsZ; }
     float GetCellSize()   const { return m_cellSize; }
@@ -56,6 +64,10 @@ public:
 
     // 방향광이 나아가는 방향 (정규화하지 않아도 된다)
     void SetLightDirection(float x, float y, float z) { m_lightDirection = { x, y, z }; }
+
+    // 픽셀 셰이더의 체커 패턴 한 칸 = 셀 크기 * 이 배율 (기본 1배).
+    // 분할 수가 큰 지형에서 1셀 단위 체커는 너무 잘아서 노이즈처럼 보이므로 키워서 쓴다.
+    void SetCheckerScale(float scale) { m_checkerScale = (scale > 0.0f) ? scale : 1.0f; }
 
     bool IsReady() const { return m_resourcesReady; }
 
@@ -96,13 +108,15 @@ private:
     size_t m_triangleCount = 0;
     UINT   m_indexCount = 0;
 
-    bool m_meshDirty = true;
+    bool   m_meshDirty = true;
+    double m_lastRebuildMs = 0.0;
 
     // ---- 표시 설정 ----
     TerrainDisplayMode m_displayMode = TerrainDisplayMode::SolidWireframe;
     DirectX::XMFLOAT4  m_solidColor{ 0.36f, 0.58f, 0.34f, 1.0f };
     DirectX::XMFLOAT4  m_wireColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     DirectX::XMFLOAT3  m_lightDirection{ 0.5f, -1.0f, 0.35f };
+    float              m_checkerScale = 1.0f;
 
     // ---- D3D 리소스 ----
     ComPtr<ID3D11VertexShader>   m_vertexShader;

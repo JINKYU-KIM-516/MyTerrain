@@ -7,36 +7,33 @@
 #include <string>
 #include <cwchar>
 
-namespace
+// 1234567 -> "1,234,567" 형태로 (숫자가 커지면 읽기 어려우므로)
+std::wstring GridControlComponent::FormatThousands(size_t value)
 {
-    // 1234567 -> "1,234,567" 형태로 (숫자가 커지면 읽기 어려우므로)
-    std::wstring WithThousandSeparator(size_t value)
+    std::wstring digits = std::to_wstring(value);
+    std::wstring result;
+    result.reserve(digits.size() + digits.size() / 3);
+
+    const size_t leading = digits.size() % 3;
+
+    for (size_t i = 0; i < digits.size(); ++i)
     {
-        std::wstring digits = std::to_wstring(value);
-        std::wstring result;
-        result.reserve(digits.size() + digits.size() / 3);
-
-        const size_t leading = digits.size() % 3;
-
-        for (size_t i = 0; i < digits.size(); ++i)
+        if (i > 0 && (i - leading) % 3 == 0)
         {
-            if (i > 0 && (i - leading) % 3 == 0)
-            {
-                result += L',';
-            }
-            result += digits[i];
+            result += L',';
         }
-
-        return result;
+        result += digits[i];
     }
 
-    // 소수점 아래 자리수를 지정해서 문자열로
-    std::wstring ToFixed(float value, int decimals)
-    {
-        wchar_t buffer[64] = {};
-        std::swprintf(buffer, 64, L"%.*f", decimals, value);
-        return buffer;
-    }
+    return result;
+}
+
+// 소수점 아래 자리수를 지정해서 문자열로
+std::wstring GridControlComponent::FormatFixed(float value, int decimals)
+{
+    wchar_t buffer[64] = {};
+    std::swprintf(buffer, 64, L"%.*f", decimals, value);
+    return buffer;
 }
 
 void GridControlComponent::SetDivisionRange(int minDivisions, int maxDivisions)
@@ -137,17 +134,17 @@ void GridControlComponent::RefreshInfoText()
 
     std::wstring text;
     text += L"분할 수 : " + std::to_wstring(divisionsX) + L" x " + std::to_wstring(divisionsZ);
-    text += L"   셀 크기 : " + ToFixed(cellSize, 3);
-    text += L"\n전체 크기 : " + ToFixed(divisionsX * cellSize, 1) + L" x " + ToFixed(divisionsZ * cellSize, 1);
+    text += L"   셀 크기 : " + FormatFixed(cellSize, 3);
+    text += L"\n전체 크기 : " + FormatFixed(divisionsX * cellSize, 1) + L" x " + FormatFixed(divisionsZ * cellSize, 1);
     // 메시는 다음 렌더링 때 다시 만들어지므로, 표시용 개수는 파라미터로부터 직접 계산한다
     const size_t vertexCount = static_cast<size_t>(divisionsX + 1) * static_cast<size_t>(divisionsZ + 1);
     const size_t triangleCount = static_cast<size_t>(divisionsX) * static_cast<size_t>(divisionsZ) * 2;
 
-    text += L"\n정점 : " + WithThousandSeparator(vertexCount);
-    text += L"   삼각형 : " + WithThousandSeparator(triangleCount);
+    text += L"\n정점 : " + FormatThousands(vertexCount);
+    text += L"   삼각형 : " + FormatThousands(triangleCount);
     text += L"\n표시 모드 : ";
     text += ToDisplayName(m_terrain->GetDisplayMode());
-    text += L"\nFPS : " + ToFixed(fps, 1);
+    text += L"\nFPS : " + FormatFixed(fps, 1);
 
     m_infoText->SetText(text);
 }
