@@ -1,13 +1,13 @@
 터레인 툴
 
-1. 기본 평면 그리드
-2. 펄린 노이즈 지형
-3. 높이맵 이미지 지형
-4. 텍스처 스플래팅 정점 경사도/높이 기반(높이별 텍스처 변경)
-5. 쿼드트리 컬링
-6-1. 거리 기반 LOD 지형1
-6-2. 고급 거리 LOD 지형2
-7. 하드웨어 테셀레이션 지형
-8. 스카이맵
-9. 동적 왜곡 구름
-10. 무한 지형 청크
+1. 기본 평면 그리드 (Basic Flat Grid)
+2. 펄린 노이즈 지형 (Perlin Noise)
+3. 높이맵 이미지 지형 (Height Map)
+4. 텍스처 스플래팅 정점 경사도/높이 기반 (Texture Splatting)
+5. 쿼드트리 컬링 (QuadTree Culling)
+6-1. 거리 기반 LOD 지형1 (Distance LOD 1)
+6-2. 고급 거리 LOD 지형2 (스티칭 & 지오머핑)
+7. 하드웨어 테셀레이션 지형 (Tessellation)
+8. 스카이맵 (SkyDome, SkyBox)
+9. 동적 왜곡 구름 (Perturbed Clouds)
+10. 무한 지형 청크 (Infinite Chunks)
