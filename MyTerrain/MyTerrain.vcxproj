@@ -69,7 +69,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -90,7 +90,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -104,7 +104,13 @@
     <ClCompile Include="src\GameObject\GameObject.cpp" />
     <ClCompile Include="src\GameObject\Transform.cpp" />
     <ClCompile Include="src\GameObject\Scene.cpp" />
+    <ClCompile Include="src\Framework\TextRenderer.cpp" />
     <ClCompile Include="src\Components\DemoInputComponent.cpp" />
+    <ClCompile Include="src\Components\KeyCommandComponent.cpp" />
+    <ClCompile Include="src\UI\UIText.cpp" />
+    <ClCompile Include="src\UI\UIButton.cpp" />
+    <ClCompile Include="src\App\ShowcaseApp.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique00_MenuTest.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -117,7 +123,13 @@
     <ClInclude Include="src\GameObject\Component.h" />
     <ClInclude Include="src\GameObject\Transform.h" />
     <ClInclude Include="src\GameObject\Scene.h" />
+    <ClInclude Include="src\Framework\TextRenderer.h" />
     <ClInclude Include="src\Components\DemoInputComponent.h" />
+    <ClInclude Include="src\Components\KeyCommandComponent.h" />
+    <ClInclude Include="src\UI\UIText.h" />
+    <ClInclude Include="src\UI\UIButton.h" />
+    <ClInclude Include="src\App\ShowcaseApp.h" />
+    <ClInclude Include="src\App\Techniques\Technique00_MenuTest.h" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

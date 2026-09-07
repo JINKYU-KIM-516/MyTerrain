@@ -13,6 +13,15 @@
     <Filter Include="Components">
       <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000004}</UniqueIdentifier>
     </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="App">
+      <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000006}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="App\Techniques">
+      <UniqueIdentifier>{9d3a0a1a-0000-4000-8000-000000000007}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 
   <ItemGroup>
@@ -43,8 +52,26 @@
     <ClCompile Include="src\GameObject\Scene.cpp">
       <Filter>GameObject</Filter>
     </ClCompile>
+    <ClCompile Include="src\Framework\TextRenderer.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
     <ClCompile Include="src\Components\DemoInputComponent.cpp">
       <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\KeyCommandComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\UI\UIText.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\UI\UIButton.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\ShowcaseApp.cpp">
+      <Filter>App</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique00_MenuTest.cpp">
+      <Filter>App\Techniques</Filter>
     </ClCompile>
   </ItemGroup>
 
@@ -76,8 +103,26 @@
     <ClInclude Include="src\GameObject\Scene.h">
       <Filter>GameObject</Filter>
     </ClInclude>
+    <ClInclude Include="src\Framework\TextRenderer.h">
+      <Filter>Framework</Filter>
+    </ClInclude>
     <ClInclude Include="src\Components\DemoInputComponent.h">
       <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\KeyCommandComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\UI\UIText.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\UI\UIButton.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\ShowcaseApp.h">
+      <Filter>App</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique00_MenuTest.h">
+      <Filter>App\Techniques</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

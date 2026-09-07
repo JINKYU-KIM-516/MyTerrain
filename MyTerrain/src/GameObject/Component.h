@@ -18,8 +18,11 @@ public:
     // 매 프레임 논리 갱신 (deltaTime: 초 단위)
     virtual void Update(float deltaTime) {}
 
-    // 매 프레임 렌더링 단계에서 호출된다
+    // 매 프레임 렌더링 단계에서 호출된다 (3D 오브젝트 렌더링)
     virtual void Render() {}
+
+    // 3D 렌더링이 모두 끝난 뒤 호출된다 (Direct2D 기반 UI/텍스트 렌더링)
+    virtual void RenderUI() {}
 
     // 컴포넌트/게임오브젝트가 파괴될 때 1회 호출된다 (리소스 해제 등)
     virtual void Destroy() {}

@@ -10,3 +10,41 @@
 기법명 텍스트를 클릭하면 그 기법이 구현된 화면으로 이동
 기법 왼쪽 상단 돌아가기 버튼("돌아가기" 텍스트) 클릭, 또는 ESC 입력 시 메뉴 화면으로 이동
 메뉴 화면 테스트용 기법 구현 화면인 "0.메뉴 구현 테스트" 추가 (아무것도 구현되지않은 빈 기법 구현 화면)
+
+
+#답장
+메뉴 시스템을 구현해서 프로젝트 폴더에 바로 반영했습니다. Visual Studio에서 솔루션을 다시 열면 새 파일들이 잡히고 빌드됩니다 (mingw로 전체 컴파일·링크까지 검증 완료).
+
+동작
+
+메뉴 화면: 상단 중앙 ===Terrain Showcase System===, 그 아래 0. 메뉴 구현 테스트 (Menu Test) 중앙 정렬. 항목 위에 마우스를 올리면 밑줄이 생기고, 클릭하면 해당 기법 화면으로 이동합니다(색은 사양대로 전부 하얀색 유지).
+오른쪽 상단 종료 클릭 또는 ESC → 프로그램 종료.
+기법 화면: 왼쪽 상단 돌아가기 클릭 또는 ESC → 메뉴 복귀. 이 공통 UI는 ShowcaseApp이 모든 기법에 자동으로 붙여주므로 기법 쪽에서 신경 쓸 필요가 없습니다.
+
+구조
+
+텍스트가 없던 프레임워크라 Direct2D + DirectWrite 기반 TextRenderer를 추가했습니다(D3D 디바이스를 BGRA 지원 + 백버퍼 B8G8R8A8_UNORM으로 전환, Component/GameObject/Scene에 3D 렌더 이후 실행되는 RenderUI() 단계 추가). UI는 기존 컴포넌트 방식 그대로 UIText / UIButton / KeyCommandComponent로 만들었고, 씬 전환은 프레임이 끝난 뒤에 처리해 자기 씬을 Update 도중 지우는 문제를 피했습니다.
+
+기법 추가할 때
+
+src/App/Techniques/에 void BuildXXXScene(Scene&)를 하나 만들고, main.cpp의 주석 처리해둔 자리에 app.RegisterTechnique(L"펄린 노이즈 지형", L"Perlin Noise Terrain", &BuildPerlinNoiseScene); 식으로 한 줄 추가하면 메뉴에 번호가 자동으로 매겨져 표시됩니다. 구조 요약은 프로젝트 문서(claude/메뉴-시스템-구조.md)에도 남겨뒀습니다.
+
+
+#문제
+버튼을 클릭해도 아무 일도 일어나지 않음
+
+
+#질문
+구현해준 버튼에 마우스 얹으면 밑줄 잘 나오는데 버튼을 클릭해도 아무 일도 안 일어나
+
+
+#답장
+Framework.cpp 한 줄 순서 문제였습니다. 게임 루프가 이렇게 돌고 있었습니다:
+
+ProcessMessages();              // 여기서 WM_LBUTTONDOWN → curr[Left] = true
+InputManager::BeginFrame();     // prev = curr  →  prev[Left] 도 true 가 됨
+scene.Update();                 // IsMouseButtonPressed = curr && !prev → 항상 false
+
+메시지를 다 받은 뒤에 이전 프레임 상태를 복사하다 보니 "눌린 순간"이 프레임 안에서 지워져서, IsMouseButtonPressed와 IsKeyPressed가 영원히 false였습니다. hover는 GetMouseX/Y만 쓰기 때문에 정상이었던 거고요. 같은 이유로 ESC도 반응하지 않았을 겁니다(원래 프레임워크의 IsKeyPressed(VK_SPACE) 로그도 마찬가지).
+
+BeginFrame()을 ProcessMessages() 앞으로 옮겨서 고쳤고, 파일은 프로젝트에 반영했습니다. 다시 빌드하면 메뉴 항목 클릭 → 기법 화면, 종료 버튼/ESC, 돌아가기까지 전부 동작합니다.

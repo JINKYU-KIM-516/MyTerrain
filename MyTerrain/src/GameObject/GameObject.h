@@ -92,6 +92,7 @@ public:
     void Start();
     void Update(float deltaTime);
     void Render();
+    void RenderUI();
     void Destroy();
 
     // ---------------- 상태 ----------------

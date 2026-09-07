@@ -21,6 +21,9 @@ public:
     void Update(float deltaTime);
     void Render();
 
+    // 3D 렌더링 이후 UI(텍스트) 렌더링 단계
+    void RenderUI();
+
     // Update/Render 이후 매 프레임 호출. MarkForDestroy 된 오브젝트를 실제로 제거한다.
     void LateUpdate();
 

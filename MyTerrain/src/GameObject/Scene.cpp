@@ -63,6 +63,17 @@ void Scene::Render()
     }
 }
 
+void Scene::RenderUI()
+{
+    for (auto& go : m_gameObjects)
+    {
+        if (!go->IsPendingDestroy())
+        {
+            go->RenderUI();
+        }
+    }
+}
+
 void Scene::LateUpdate()
 {
     auto it = std::remove_if(m_gameObjects.begin(), m_gameObjects.end(),

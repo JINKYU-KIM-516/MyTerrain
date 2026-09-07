@@ -24,7 +24,7 @@ bool D3DRenderer::CreateDeviceAndSwapChain(HWND hwnd, UINT width, UINT height)
     scd.BufferCount = 1;
     scd.BufferDesc.Width = width;
     scd.BufferDesc.Height = height;
-    scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    scd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     scd.BufferDesc.RefreshRate.Numerator = 60;
     scd.BufferDesc.RefreshRate.Denominator = 1;
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -34,7 +34,8 @@ bool D3DRenderer::CreateDeviceAndSwapChain(HWND hwnd, UINT width, UINT height)
     scd.Windowed = TRUE;
     scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
-    UINT createDeviceFlags = 0;
+    // Direct2D(텍스트 렌더링) 연동을 위해 BGRA 지원 플래그가 필요하다
+    UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #if defined(_DEBUG)
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
@@ -133,7 +134,7 @@ void D3DRenderer::OnResize(UINT width, UINT height)
     m_depthStencilView.Reset();
     m_depthStencilBuffer.Reset();
 
-    HRESULT hr = m_swapChain->ResizeBuffers(1, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+    HRESULT hr = m_swapChain->ResizeBuffers(1, width, height, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
     assert(SUCCEEDED(hr) && "SwapChain ResizeBuffers 실패");
     (void)hr;
 

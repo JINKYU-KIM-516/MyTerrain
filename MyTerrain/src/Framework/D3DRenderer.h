@@ -27,6 +27,7 @@ public:
     void EndFrame();
 
     ID3D11Device*        GetDevice()  const { return m_device.Get(); }
+    IDXGISwapChain*      GetSwapChain() const { return m_swapChain.Get(); }
     ID3D11DeviceContext* GetContext() const { return m_context.Get(); }
 
     UINT GetWidth()  const { return m_width; }
