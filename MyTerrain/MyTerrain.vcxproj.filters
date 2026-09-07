@@ -109,6 +109,18 @@
     <ClCompile Include="src\App\Techniques\Technique02_PerlinNoise.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\HeightMap.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Terrain\HeightMapTexture.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\HeightMapControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique03_HeightMap.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -188,6 +200,18 @@
       <Filter>Components</Filter>
     </ClInclude>
     <ClInclude Include="src\App\Techniques\Technique02_PerlinNoise.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\HeightMap.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\HeightMapTexture.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\HeightMapControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique03_HeightMap.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
   </ItemGroup>

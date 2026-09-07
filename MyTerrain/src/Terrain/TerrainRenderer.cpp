@@ -41,6 +41,9 @@ void TerrainRenderer::Destroy()
     m_wireRasterizer.Reset();
     m_depthState.Reset();
 
+    m_heightMapSRV.Reset();
+    m_heightMapSampler.Reset();
+
     m_resourcesReady = false;
     m_meshDirty = true;
 }
@@ -66,6 +69,19 @@ void TerrainRenderer::SetHeightFunction(const GridMesh::HeightFunc& heightFunc)
 {
     m_heightFunc = heightFunc;
     m_meshDirty = true;
+}
+
+void TerrainRenderer::SetHeightMapResources(ID3D11ShaderResourceView* srv, ID3D11SamplerState* sampler)
+{
+    // ComPtr 로 받아두어 컴포넌트가 텍스처를 교체해도 그리는 도중에 사라지지 않게 한다
+    m_heightMapSRV = srv;
+    m_heightMapSampler = sampler;
+}
+
+void TerrainRenderer::SetHeightMapMapping(float worldSize, bool flipZ)
+{
+    m_heightMapWorldSize = std::max(worldSize, 0.0001f);
+    m_heightMapFlipZ = flipZ;
 }
 
 void TerrainRenderer::CycleDisplayMode()
@@ -258,6 +274,16 @@ void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
     constants->cameraPosition = cameraPosition;
     constants->cellSize = m_cellSize * m_checkerScale;
 
+    // 고도 색상은 텍스처가 실제로 올라와 있고 조명 패스일 때만 켠다
+    // (와이어프레임 패스는 단색이므로 텍스처를 읽을 이유가 없다)
+    const bool heightColorOn = m_heightColorMode && useLighting && m_heightMapSRV && m_heightMapSampler;
+
+    constants->heightMapParams = XMFLOAT4(
+        1.0f / std::max(m_heightMapWorldSize, 0.0001f),
+        m_heightMapFlipZ ? -1.0f : 1.0f,
+        heightColorOn ? 1.0f : 0.0f,
+        0.0f);
+
     context->Unmap(m_constantBuffer.Get(), 0);
 }
 
@@ -328,6 +354,15 @@ void TerrainRenderer::Render()
 
     context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
     context->OMSetDepthStencilState(m_depthState.Get(), 0);
+
+    // 높이맵 텍스처 (없으면 확실히 풀어준다 -- 앞 기법이 걸어둔 것이 남아있으면 안 된다)
+    {
+        ID3D11ShaderResourceView* srv = m_heightMapSRV.Get();
+        ID3D11SamplerState* sampler = m_heightMapSampler.Get();
+
+        context->PSSetShaderResources(0, 1, &srv);
+        context->PSSetSamplers(0, 1, &sampler);
+    }
 
     // ---------------- 행렬 ----------------
     XMMATRIX world = XMMatrixIdentity();

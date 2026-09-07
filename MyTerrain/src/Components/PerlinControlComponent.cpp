@@ -67,55 +67,6 @@ float PerlinControlComponent::SampleHeight(float worldX, float worldZ)
     return height;
 }
 
-int PerlinControlComponent::ReadAdjustDirection(float deltaTime)
-{
-    InputManager& input = InputManager::GetInstance();
-
-    const bool right = input.IsKeyDown(VK_RIGHT);
-    const bool left = input.IsKeyDown(VK_LEFT);
-
-    const int direction = (right && !left) ? 1 : ((left && !right) ? -1 : 0);
-
-    if (direction == 0)
-    {
-        m_repeatDirection = 0;
-        m_repeatTimer = 0.0f;
-        m_repeatStarted = false;
-        return 0;
-    }
-
-    // 방향이 바뀐 순간(= 막 눌린 순간)은 즉시 한 번 반응한다
-    if (direction != m_repeatDirection)
-    {
-        m_repeatDirection = direction;
-        m_repeatTimer = 0.0f;
-        m_repeatStarted = false;
-        return direction;
-    }
-
-    m_repeatTimer += deltaTime;
-
-    // 반복 간격은 재생성 비용에 맞춰 늘린다.
-    // (Debug 빌드나 512분할에서는 한 번 만드는 데 수십 ms 가 걸리므로,
-    //  고정 간격으로 계속 다시 만들면 화면이 멈춘 것처럼 보인다)
-    float interval = kRepeatInterval;
-    if (m_terrain != nullptr)
-    {
-        const float rebuildSeconds = static_cast<float>(m_terrain->GetLastRebuildMilliseconds()) * 0.001f;
-        interval = std::max(interval, rebuildSeconds * 2.0f);
-    }
-
-    const float threshold = m_repeatStarted ? interval : kRepeatDelay;
-    if (m_repeatTimer >= threshold)
-    {
-        m_repeatTimer = 0.0f;
-        m_repeatStarted = true;
-        return direction;
-    }
-
-    return 0;
-}
-
 void PerlinControlComponent::AdjustSelected(int direction)
 {
     const float sign = static_cast<float>(direction);

@@ -70,7 +70,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- windowscodecs.lib : WIC(Windows Imaging Component). 3번 높이맵 기법에서 PNG/BMP/TIFF 를 읽는다 -->
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;d2d1.lib;dwrite.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -92,7 +93,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;d2d1.lib;dwrite.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- windowscodecs.lib : WIC(Windows Imaging Component). 3번 높이맵 기법에서 PNG/BMP/TIFF 를 읽는다 -->
+      <AdditionalDependencies>d3d11.lib;dxgi.lib;d3dcompiler.lib;d2d1.lib;dwrite.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -123,6 +125,10 @@
     <ClCompile Include="src\Terrain\PerlinNoise.cpp" />
     <ClCompile Include="src\Components\PerlinControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique02_PerlinNoise.cpp" />
+    <ClCompile Include="src\Terrain\HeightMap.cpp" />
+    <ClCompile Include="src\Terrain\HeightMapTexture.cpp" />
+    <ClCompile Include="src\Components\HeightMapControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique03_HeightMap.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -152,6 +158,10 @@
     <ClInclude Include="src\Terrain\PerlinNoise.h" />
     <ClInclude Include="src\Components\PerlinControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique02_PerlinNoise.h" />
+    <ClInclude Include="src\Terrain\HeightMap.h" />
+    <ClInclude Include="src\Terrain\HeightMapTexture.h" />
+    <ClInclude Include="src\Components\HeightMapControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique03_HeightMap.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로

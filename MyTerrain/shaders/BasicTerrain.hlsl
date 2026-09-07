@@ -24,7 +24,18 @@ cbuffer CBTerrain : register(b0)
 
     float3   gCameraPos;        // 카메라 월드 위치 (추후 안개/LOD 용)
     float    gCellSize;         // 그리드 한 칸의 크기 (체커 패턴 기준)
+
+    // 3번 높이맵 기법에서만 쓴다.
+    //   x = 1 / 높이맵이 덮는 월드 크기
+    //   y = Z 방향 부호 (이미지 위쪽을 +Z 에 두면 -1)
+    //   z = 고도 색상 모드 (0 = 끔 -> 1·2번 기법과 완전히 동일하게 동작)
+    //   w = 예약
+    float4   gHeightMapParams;
 };
+
+// 높이맵 텍스처. 3번 기법에서만 바인딩되고, 그 외에는 비어 있다(모드가 0이라 읽지 않는다).
+Texture2D    gHeightMap    : register(t0);
+SamplerState gHeightMapSam : register(s0);
 
 struct VSInput
 {
@@ -59,6 +70,31 @@ PSInput VSMain(VSInput input)
 }
 
 //---------------------------------------------------------------
+// 고도 램프 : 0~1 을 지형 색으로 (물 -> 모래 -> 풀 -> 흙 -> 바위 -> 눈)
+//
+// 색 자체가 목적이 아니라, GPU 가 읽은 높이가 CPU 가 정점에 구워 넣은 높이와
+// 같은지 확인하는 것이 목적이다. 색 띠의 경계가 지형의 등고선을 따라가면 맞는 것이고,
+// 밀리거나 뒤집혀 보이면 UV 규약이 어긋난 것이다.
+//---------------------------------------------------------------
+float3 ElevationRamp(float h)
+{
+    float3 water = float3(0.16f, 0.29f, 0.42f);
+    float3 sand  = float3(0.76f, 0.70f, 0.48f);
+    float3 grass = float3(0.31f, 0.47f, 0.26f);
+    float3 dirt  = float3(0.44f, 0.36f, 0.24f);
+    float3 rock  = float3(0.48f, 0.47f, 0.46f);
+    float3 snow  = float3(0.94f, 0.95f, 0.97f);
+
+    float3 color = lerp(water, sand,  smoothstep(0.04f, 0.12f, h));
+    color = lerp(color, grass, smoothstep(0.12f, 0.24f, h));
+    color = lerp(color, dirt,  smoothstep(0.36f, 0.52f, h));
+    color = lerp(color, rock,  smoothstep(0.58f, 0.74f, h));
+    color = lerp(color, snow,  smoothstep(0.82f, 0.93f, h));
+
+    return color;
+}
+
+//---------------------------------------------------------------
 // Pixel Shader
 //---------------------------------------------------------------
 float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET
@@ -79,11 +115,29 @@ float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET
     float3 L = normalize(-gLightDir);
     float  ndl = saturate(dot(N, L));
 
-    // 셀 단위 체커 패턴 (격자 구조가 솔리드 모드에서도 보이도록)
-    float2 cell = floor(input.worldPos.xz / max(gCellSize, 0.0001f));
-    float  checker = frac((cell.x + cell.y) * 0.5f) * 2.0f;   // 0 또는 1
+    float3 albedo;
 
-    float3 albedo = lerp(gBaseColor.rgb, gBaseColor.rgb * 0.72f, checker);
+    if (gHeightMapParams.z > 0.5f)
+    {
+        // ---- 고도 색상 모드 : 높이맵 텍스처를 GPU 에서 직접 읽는다 ----
+        // UV 계산은 C++ 쪽 HeightMap::Evaluate 와 글자 그대로 같은 식이어야 한다.
+        //   u = worldX / worldSize + 0.5
+        //   v = 0.5 + worldZ / worldSize * (flipZ ? -1 : +1)
+        float2 uv;
+        uv.x = input.worldPos.x * gHeightMapParams.x + 0.5f;
+        uv.y = input.worldPos.z * gHeightMapParams.x * gHeightMapParams.y + 0.5f;
+
+        float h01 = gHeightMap.SampleLevel(gHeightMapSam, uv, 0).r;
+        albedo = ElevationRamp(h01);
+    }
+    else
+    {
+        // ---- 기본 : 셀 단위 체커 패턴 (격자 구조가 솔리드 모드에서도 보이도록) ----
+        float2 cell = floor(input.worldPos.xz / max(gCellSize, 0.0001f));
+        float  checker = frac((cell.x + cell.y) * 0.5f) * 2.0f;   // 0 또는 1
+
+        albedo = lerp(gBaseColor.rgb, gBaseColor.rgb * 0.72f, checker);
+    }
 
     // 앰비언트 + 디퓨즈
     float3 color = albedo * (0.35f + 0.65f * ndl);

@@ -4,6 +4,7 @@
 #include "App/Techniques/Technique00_MenuTest.h"
 #include "App/Techniques/Technique01_FlatGrid.h"
 #include "App/Techniques/Technique02_PerlinNoise.h"
+#include "App/Techniques/Technique03_HeightMap.h"
 
 // ------------------------------------------------------------
 // Terrain Showcase System - 진입점
@@ -50,6 +51,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     app.RegisterTechnique(L"메뉴 구현 테스트", L"Menu Test", &BuildMenuTestScene);
     app.RegisterTechnique(L"기본 평면 그리드", L"Basic Flat Grid", &BuildFlatGridScene);
     app.RegisterTechnique(L"펄린 노이즈 지형", L"Perlin Noise", &BuildPerlinNoiseScene);
+    app.RegisterTechnique(L"높이맵 지형", L"Heightmap Terrain", &BuildHeightMapScene);
     // ...
 
     // 메뉴 화면 구성

@@ -69,6 +69,19 @@ public:
     // 분할 수가 큰 지형에서 1셀 단위 체커는 너무 잘아서 노이즈처럼 보이므로 키워서 쓴다.
     void SetCheckerScale(float scale) { m_checkerScale = (scale > 0.0f) ? scale : 1.0f; }
 
+    // ---------------- 높이맵 텍스처 (3번 기법에서 사용) ----------------
+    // 높이맵을 GPU 텍스처로 올려두면 픽셀 셰이더가 고도별로 색을 칠할 수 있다.
+    // 아무것도 넘기지 않으면(기본) 셰이더는 지금까지와 똑같이 동작하므로 1·2번 기법은 영향이 없다.
+    void SetHeightMapResources(ID3D11ShaderResourceView* srv, ID3D11SamplerState* sampler);
+
+    // 높이맵 한 장이 덮는 월드 크기와 Z 방향. HeightMap::Params 와 같은 값을 넘겨야
+    // 셰이더가 CPU 와 똑같은 텍셀을 읽는다.
+    void SetHeightMapMapping(float worldSize, bool flipZ);
+
+    // 고도별 색상 모드. 켜면 체커 대신 높이맵 텍스처를 읽어 고도 램프 색을 칠한다.
+    void SetHeightColorMode(bool enabled) { m_heightColorMode = enabled; }
+    bool IsHeightColorMode() const { return m_heightColorMode; }
+
     bool IsReady() const { return m_resourcesReady; }
 
 private:
@@ -86,7 +99,7 @@ private:
                               bool useLighting);
 
 private:
-    // BasicTerrain.hlsl 의 cbuffer CBTerrain 과 메모리 배치가 같아야 한다 (176바이트)
+    // BasicTerrain.hlsl 의 cbuffer CBTerrain 과 메모리 배치가 같아야 한다 (192바이트)
     struct TerrainConstants
     {
         DirectX::XMFLOAT4X4 world;
@@ -96,6 +109,12 @@ private:
         float               useLighting;
         DirectX::XMFLOAT3   cameraPosition;
         float               cellSize;
+
+        // x = 1 / 높이맵이 덮는 월드 크기
+        // y = Z 방향 부호 (flipZ 면 -1)
+        // z = 고도 색상 모드 (0 = 끔, 1 = 켬)
+        // w = 예약
+        DirectX::XMFLOAT4   heightMapParams;
     };
 
     // ---- 그리드 파라미터 ----
@@ -117,6 +136,13 @@ private:
     DirectX::XMFLOAT4  m_wireColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     DirectX::XMFLOAT3  m_lightDirection{ 0.5f, -1.0f, 0.35f };
     float              m_checkerScale = 1.0f;
+
+    // ---- 높이맵 텍스처 ----
+    ComPtr<ID3D11ShaderResourceView> m_heightMapSRV;
+    ComPtr<ID3D11SamplerState>       m_heightMapSampler;
+    float m_heightMapWorldSize = 256.0f;
+    bool  m_heightMapFlipZ = true;
+    bool  m_heightColorMode = false;
 
     // ---- D3D 리소스 ----
     ComPtr<ID3D11VertexShader>   m_vertexShader;

@@ -49,8 +49,8 @@ protected:
 private:
     float SampleHeight(float worldX, float worldZ);
 
-    // 좌/우 키를 읽어 -1 / 0 / +1 을 돌려준다. 누르고 있으면 일정 간격으로 반복된다.
-    int  ReadAdjustDirection(float deltaTime);
+    // 좌/우 키 리핏(ReadAdjustDirection)은 3번 높이맵 기법과 공용이라
+    // 부모 GridControlComponent 로 옮겨두었다.
     void AdjustSelected(int direction);
 
     // 시드 반영 + 메시 재생성 요청
@@ -63,13 +63,6 @@ private:
 
     ParamId      m_selected = ParamId::Scale;
     unsigned int m_appliedSeed = 0;
-
-    // ---- 좌/우 키 리핏 ----
-    int   m_repeatDirection = 0;
-    float m_repeatTimer = 0.0f;
-    bool  m_repeatStarted = false;
-    static constexpr float kRepeatDelay = 0.35f;      // 처음 반복까지 기다리는 시간
-    static constexpr float kRepeatInterval = 0.09f;   // 그 뒤 반복 간격
 
     // ---- 높이 범위 통계 ----
     // 생성 중(=Render 안에서 높이 함수가 불릴 때)에는 sample 쪽에 쌓고,
