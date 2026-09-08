@@ -121,6 +121,15 @@
     <ClCompile Include="src\App\Techniques\Technique03_HeightMap.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\SplatTexture.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\SplatControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique04_TextureSplatting.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -212,6 +221,15 @@
       <Filter>Components</Filter>
     </ClInclude>
     <ClInclude Include="src\App\Techniques\Technique03_HeightMap.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\SplatTexture.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\SplatControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique04_TextureSplatting.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
   </ItemGroup>

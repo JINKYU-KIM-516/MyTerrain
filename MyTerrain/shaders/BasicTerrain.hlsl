@@ -31,11 +31,23 @@ cbuffer CBTerrain : register(b0)
     //   z = 고도 색상 모드 (0 = 끔 -> 1·2번 기법과 완전히 동일하게 동작)
     //   w = 예약
     float4   gHeightMapParams;
+
+    // 4번 스플래팅 기법에서만 쓴다.
+    //   x = 텍스처 타일링 배율 (worldPos.xz 에 곱해서 UV 로 쓴다)
+    //   y = 경사 임계값 시작 (0 = 평지, 1 = 수직)
+    //   z = 경사 임계값 끝
+    //   w = 스플래팅 모드 (0 = 끔 -> 1~3번 기법과 완전히 동일하게 동작)
+    float4   gSplatParams;
 };
 
-// 높이맵 텍스처. 3번 기법에서만 바인딩되고, 그 외에는 비어 있다(모드가 0이라 읽지 않는다).
+// 높이맵 텍스처. 3·4번 기법에서 바인딩된다(모드가 둘 다 0이면 읽지 않는다).
 Texture2D    gHeightMap    : register(t0);
 SamplerState gHeightMapSam : register(s0);
+
+// 스플래팅 디퓨즈 텍스처 배열(모래/잔디/바위/눈, 이 순서로 슬라이스 0~3).
+// 4번 기법에서만 바인딩되고, 그 외에는 비어 있다(모드가 0이라 읽지 않는다).
+Texture2DArray gSplatTextures : register(t1);
+SamplerState   gSplatSampler  : register(s1);
 
 struct VSInput
 {
@@ -67,6 +79,45 @@ PSInput VSMain(VSInput input)
     output.uv = input.uv;
 
     return output;
+}
+
+//---------------------------------------------------------------
+// 높이맵 텍스처에서 정규화된 높이(0~1)를 읽는다. 3·4번 기법이 함께 쓴다.
+// UV 식은 C++ 쪽 HeightMap::Evaluate 와 글자 그대로 같아야 한다.
+//   u = worldX / worldSize + 0.5
+//   v = 0.5 + worldZ / worldSize * (flipZ ? -1 : +1)
+//---------------------------------------------------------------
+float SampleHeight01(float3 worldPos)
+{
+    float2 uv;
+    uv.x = worldPos.x * gHeightMapParams.x + 0.5f;
+    uv.y = worldPos.z * gHeightMapParams.x * gHeightMapParams.y + 0.5f;
+
+    return gHeightMap.SampleLevel(gHeightMapSam, uv, 0).r;
+}
+
+//---------------------------------------------------------------
+// 4번 텍스처 스플래팅 : 정점의 높이(h, 0~1)와 경사도(slope, 0=평지·1=수직)로
+// 모래/잔디/바위/눈 네 레이어의 가중치를 계산한다. 반환값의 네 성분 합은 항상 1이다.
+//
+//   높이 구간(고정)   : 0.15~0.25 모래->잔디, 0.45~0.55 잔디->바위, 0.75~0.85 바위->눈
+//   경사 구간(조절 가능, gSplatParams.yz) : 급해질수록 모래/잔디를 바위 쪽으로 밀어준다
+//---------------------------------------------------------------
+float4 SplatWeights(float h, float slope)
+{
+    float wSand  = 1.0f - smoothstep(0.15f, 0.25f, h);
+    float wGrass = smoothstep(0.15f, 0.25f, h) * (1.0f - smoothstep(0.45f, 0.55f, h));
+    float wRock  = smoothstep(0.45f, 0.55f, h) * (1.0f - smoothstep(0.75f, 0.85f, h));
+    float wSnow  = smoothstep(0.75f, 0.85f, h);
+
+    // 경사가 급해질수록 모래/잔디를 깎아 바위로 옮긴다 (넷의 합은 그대로 보존된다)
+    float wCliff = smoothstep(gSplatParams.y, gSplatParams.z, slope);
+    float toRock = wCliff * (wSand + wGrass);
+    wSand  *= (1.0f - wCliff);
+    wGrass *= (1.0f - wCliff);
+    wRock  += toRock;
+
+    return float4(wSand, wGrass, wRock, wSnow);
 }
 
 //---------------------------------------------------------------
@@ -117,17 +168,29 @@ float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 
     float3 albedo;
 
-    if (gHeightMapParams.z > 0.5f)
+    if (gSplatParams.w > 0.5f)
+    {
+        // ---- 4번 텍스처 스플래팅 : 정점 높이/경사도로 뽑은 가중치로 4장을 섞는다 ----
+        float h01 = SampleHeight01(input.worldPos);
+        float slope = 1.0f - saturate(N.y);   // 0 = 평지, 1 = 수직 (up = (0,1,0) 이므로 dot(N,up) = N.y)
+
+        float4 w = SplatWeights(h01, slope);
+
+        // 타일링 : 텍스처 좌표를 월드 좌표에 직접 걸어서 지형 전체에 반복시킨다.
+        // 배율이 너무 작으면(타일이 너무 크면) 흐릿해 보이고, 너무 크면 반복 패턴이 도드라진다.
+        float2 tiledUV = input.worldPos.xz * gSplatParams.x;
+
+        float3 cSand  = gSplatTextures.Sample(gSplatSampler, float3(tiledUV, 0.0f)).rgb;
+        float3 cGrass = gSplatTextures.Sample(gSplatSampler, float3(tiledUV, 1.0f)).rgb;
+        float3 cRock  = gSplatTextures.Sample(gSplatSampler, float3(tiledUV, 2.0f)).rgb;
+        float3 cSnow  = gSplatTextures.Sample(gSplatSampler, float3(tiledUV, 3.0f)).rgb;
+
+        albedo = cSand * w.x + cGrass * w.y + cRock * w.z + cSnow * w.w;
+    }
+    else if (gHeightMapParams.z > 0.5f)
     {
         // ---- 고도 색상 모드 : 높이맵 텍스처를 GPU 에서 직접 읽는다 ----
-        // UV 계산은 C++ 쪽 HeightMap::Evaluate 와 글자 그대로 같은 식이어야 한다.
-        //   u = worldX / worldSize + 0.5
-        //   v = 0.5 + worldZ / worldSize * (flipZ ? -1 : +1)
-        float2 uv;
-        uv.x = input.worldPos.x * gHeightMapParams.x + 0.5f;
-        uv.y = input.worldPos.z * gHeightMapParams.x * gHeightMapParams.y + 0.5f;
-
-        float h01 = gHeightMap.SampleLevel(gHeightMapSam, uv, 0).r;
+        float h01 = SampleHeight01(input.worldPos);
         albedo = ElevationRamp(h01);
     }
     else

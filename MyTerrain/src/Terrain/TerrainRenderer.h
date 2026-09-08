@@ -82,6 +82,20 @@ public:
     void SetHeightColorMode(bool enabled) { m_heightColorMode = enabled; }
     bool IsHeightColorMode() const { return m_heightColorMode; }
 
+    // ---------------- 텍스처 스플래팅 (4번 기법에서 사용) ----------------
+    // 모래/잔디/바위/눈 4장을 배열 텍스처 하나로 받는다. 아무것도 넘기지 않으면
+    // (기본) 셰이더는 스플래팅 분기를 타지 않으므로 1~3번 기법은 영향이 없다.
+    void SetSplatResources(ID3D11ShaderResourceView* arraySrv, ID3D11SamplerState* sampler);
+
+    // tiling         : 텍스처가 월드 1 단위당 몇 번 반복되는지 (worldPos.xz 에 곱해서 UV 로 쓴다)
+    // slopeStart/End : 경사도(0=평지, 1=수직)가 이 구간을 지나며 모래/잔디에서 바위로 전이된다
+    void SetSplatParams(float tiling, float slopeStart, float slopeEnd);
+
+    // 켜면 고도 색상/체커 대신 정점 높이·경사도로 섞은 스플래팅 텍스처를 그린다.
+    // 실제로는 텍스처가 올라와 있을 때만 켜진다 (UpdateConstantBuffer 참고).
+    void SetSplatMode(bool enabled) { m_splatMode = enabled; }
+    bool IsSplatMode() const { return m_splatMode; }
+
     bool IsReady() const { return m_resourcesReady; }
 
 private:
@@ -115,6 +129,13 @@ private:
         // z = 고도 색상 모드 (0 = 끔, 1 = 켬)
         // w = 예약
         DirectX::XMFLOAT4   heightMapParams;
+
+        // 4번 스플래팅 기법에서만 쓴다.
+        //   x = 텍스처 타일링 배율
+        //   y = 경사 임계값 시작 (0=평지, 1=수직)
+        //   z = 경사 임계값 끝
+        //   w = 스플래팅 모드 (0 = 끔 -> 1~3번 기법과 완전히 동일하게 동작)
+        DirectX::XMFLOAT4   splatParams;
     };
 
     // ---- 그리드 파라미터 ----
@@ -143,6 +164,14 @@ private:
     float m_heightMapWorldSize = 256.0f;
     bool  m_heightMapFlipZ = true;
     bool  m_heightColorMode = false;
+
+    // ---- 스플래팅 텍스처 ----
+    ComPtr<ID3D11ShaderResourceView> m_splatSRV;
+    ComPtr<ID3D11SamplerState>       m_splatSampler;
+    float m_splatTiling = 0.08f;
+    float m_splatSlopeStart = 0.35f;
+    float m_splatSlopeEnd = 0.65f;
+    bool  m_splatMode = false;
 
     // ---- D3D 리소스 ----
     ComPtr<ID3D11VertexShader>   m_vertexShader;

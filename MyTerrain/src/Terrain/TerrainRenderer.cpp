@@ -44,6 +44,9 @@ void TerrainRenderer::Destroy()
     m_heightMapSRV.Reset();
     m_heightMapSampler.Reset();
 
+    m_splatSRV.Reset();
+    m_splatSampler.Reset();
+
     m_resourcesReady = false;
     m_meshDirty = true;
 }
@@ -82,6 +85,19 @@ void TerrainRenderer::SetHeightMapMapping(float worldSize, bool flipZ)
 {
     m_heightMapWorldSize = std::max(worldSize, 0.0001f);
     m_heightMapFlipZ = flipZ;
+}
+
+void TerrainRenderer::SetSplatResources(ID3D11ShaderResourceView* arraySrv, ID3D11SamplerState* sampler)
+{
+    m_splatSRV = arraySrv;
+    m_splatSampler = sampler;
+}
+
+void TerrainRenderer::SetSplatParams(float tiling, float slopeStart, float slopeEnd)
+{
+    m_splatTiling = std::max(tiling, 0.0001f);
+    m_splatSlopeStart = std::clamp(slopeStart, 0.0f, 1.0f);
+    m_splatSlopeEnd = std::clamp(std::max(slopeEnd, m_splatSlopeStart), 0.0f, 1.0f);
 }
 
 void TerrainRenderer::CycleDisplayMode()
@@ -284,6 +300,16 @@ void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
         heightColorOn ? 1.0f : 0.0f,
         0.0f);
 
+    // 스플래팅도 조명 패스일 때만, 텍스처가 실제로 올라와 있을 때만 켠다
+    // (와이어프레임 패스는 단색이라 텍스처를 읽을 이유가 없다)
+    const bool splatOn = m_splatMode && useLighting && m_splatSRV && m_splatSampler;
+
+    constants->splatParams = XMFLOAT4(
+        m_splatTiling,
+        m_splatSlopeStart,
+        m_splatSlopeEnd,
+        splatOn ? 1.0f : 0.0f);
+
     context->Unmap(m_constantBuffer.Get(), 0);
 }
 
@@ -362,6 +388,15 @@ void TerrainRenderer::Render()
 
         context->PSSetShaderResources(0, 1, &srv);
         context->PSSetSamplers(0, 1, &sampler);
+    }
+
+    // 스플래팅 배열 텍스처 (t1/s1). 마찬가지로 없으면 확실히 풀어준다.
+    {
+        ID3D11ShaderResourceView* srv = m_splatSRV.Get();
+        ID3D11SamplerState* sampler = m_splatSampler.Get();
+
+        context->PSSetShaderResources(1, 1, &srv);
+        context->PSSetSamplers(1, 1, &sampler);
     }
 
     // ---------------- 행렬 ----------------

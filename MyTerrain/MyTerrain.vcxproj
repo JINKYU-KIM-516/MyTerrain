@@ -129,6 +129,9 @@
     <ClCompile Include="src\Terrain\HeightMapTexture.cpp" />
     <ClCompile Include="src\Components\HeightMapControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique03_HeightMap.cpp" />
+    <ClCompile Include="src\Terrain\SplatTexture.cpp" />
+    <ClCompile Include="src\Components\SplatControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique04_TextureSplatting.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -162,6 +165,9 @@
     <ClInclude Include="src\Terrain\HeightMapTexture.h" />
     <ClInclude Include="src\Components\HeightMapControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique03_HeightMap.h" />
+    <ClInclude Include="src\Terrain\SplatTexture.h" />
+    <ClInclude Include="src\Components\SplatControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique04_TextureSplatting.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로
