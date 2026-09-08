@@ -20,3 +20,5 @@
 8. 스카이맵 (SkyDome, SkyBox)
 9. 동적 왜곡 구름 (Perturbed Clouds)
 10. 무한 지형 청크 (Infinite Chunks)
+
+볼륨 텍스처 <- 3D 텍스처
