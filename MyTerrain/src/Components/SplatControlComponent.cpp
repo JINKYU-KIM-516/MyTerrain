@@ -1,4 +1,4 @@
-#include "SplatControlComponent.h"
+﻿#include "SplatControlComponent.h"
 #include "../Framework/InputManager.h"
 #include "../Terrain/TerrainRenderer.h"
 #include "../UI/UIText.h"

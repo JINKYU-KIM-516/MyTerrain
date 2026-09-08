@@ -1,4 +1,4 @@
-#include "SplatTexture.h"
+﻿#include "SplatTexture.h"
 #include "../Framework/Framework.h"
 #include "../Framework/ShaderUtil.h"
 
