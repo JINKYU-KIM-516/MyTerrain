@@ -1,10 +1,12 @@
 ﻿#pragma once
 #include "../GameObject/Component.h"
 #include "GridMesh.h"
+#include "Quadtree.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
 #include <string>
+#include <vector>
 
 // 지형 메시의 표시 방식
 enum class TerrainDisplayMode
@@ -98,12 +100,48 @@ public:
 
     bool IsReady() const { return m_resourcesReady; }
 
+    // ---------------- 쿼드트리 컬링 (5번 기법에서 사용) ----------------
+    // maxLeafCells 를 한 번도 설정하지 않으면(기본값 0) 이 기능은 완전히 비활성 상태로 남고
+    // 1~4번 기법과 완전히 똑같이 인덱스 버퍼 하나로 통째로 그린다.
+    // 리프 한 변의 최대 셀 수. 값이 바뀌면 다음 렌더링 직전에 쿼드트리만 다시 만든다
+    // (전체 메시를 다시 굽지는 않는다 -- Perlin 노이즈처럼 높이 계산이 비싼 지형에서도
+    //  리프 크기 조절은 가볍게 반응해야 하기 때문).
+    void SetQuadtreeLeafSize(int maxLeafCells);
+    int  GetQuadtreeLeafSize() const { return m_quadtreeMaxLeafCells; }
+
+    // 켜면 절두체 밖 리프를 건너뛰고 보이는 리프만 나눠 그린다.
+    // 끄면(기본) 쿼드트리가 만들어져 있어도 1~4번과 같은 단일 Draw 호출로 되돌아간다
+    // (컬링 유무를 눈으로 비교하기 위한 스위치).
+    void SetQuadtreeCullingEnabled(bool enabled) { m_quadtreeCullingEnabled = enabled; }
+    bool IsQuadtreeCullingEnabled() const { return m_quadtreeCullingEnabled; }
+
+    // 켜면 보이는 리프들의 AABB 를 선으로 겹쳐 그린다 (컬링이 실제로 뭘 하고 있는지 시각화).
+    void SetQuadtreeDebugBoxesEnabled(bool enabled) { m_quadtreeDebugBoxesEnabled = enabled; }
+    bool IsQuadtreeDebugBoxesEnabled() const { return m_quadtreeDebugBoxesEnabled; }
+
+    // 지난 프레임 기준 통계 (HUD 표시용)
+    size_t GetQuadtreeLeafCount() const { return m_quadtree.leaves.size(); }
+    size_t GetQuadtreeNodeCount() const { return m_quadtree.nodes.size(); }
+    size_t GetQuadtreeVisibleLeafCount() const { return m_quadtreeVisibleLeafCount; }
+
 private:
     // 셰이더 / 입력 레이아웃 / 래스터라이저 상태 / 상수 버퍼 생성 (최초 1회)
     bool CreateDeviceResources();
 
     // 현재 파라미터로 정점/인덱스 버퍼를 다시 만든다
     bool RebuildMesh();
+
+    // m_cpuMesh 로부터 쿼드트리(및 재정렬된 인덱스 버퍼)를 다시 만든다.
+    // m_quadtreeMaxLeafCells <= 0 이면(기능 미사용) 아무 것도 하지 않고 비운다.
+    bool RebuildQuadtreeIndexBuffer();
+
+    // 보이는 리프들의 AABB 를 선(LINELIST)으로 그린다. 기존 셰이더/입력 레이아웃을
+    // 그대로 재사용한다 (GridMesh::Vertex 모양으로 박스 모서리를 채워 넣을 뿐).
+    void RenderDebugBoxes(ID3D11DeviceContext* context,
+                          const DirectX::XMMATRIX& world,
+                          const DirectX::XMMATRIX& viewProj,
+                          const DirectX::XMFLOAT3& cameraPosition,
+                          const std::vector<int>& visibleLeaves);
 
     void UpdateConstantBuffer(ID3D11DeviceContext* context,
                               const DirectX::XMMATRIX& world,
@@ -151,6 +189,10 @@ private:
     bool   m_meshDirty = true;
     double m_lastRebuildMs = 0.0;
 
+    // RebuildMesh 가 마지막으로 만든 CPU 메시. 리프 크기만 바뀌었을 때(SetQuadtreeLeafSize)
+    // 높이를 다시 계산하지 않고 쿼드트리만 다시 만들기 위해 들고 있는다.
+    GridMesh::MeshData m_cpuMesh;
+
     // ---- 표시 설정 ----
     TerrainDisplayMode m_displayMode = TerrainDisplayMode::SolidWireframe;
     DirectX::XMFLOAT4  m_solidColor{ 0.36f, 0.58f, 0.34f, 1.0f };
@@ -172,6 +214,22 @@ private:
     float m_splatSlopeStart = 0.35f;
     float m_splatSlopeEnd = 0.65f;
     bool  m_splatMode = false;
+
+    // ---- 쿼드트리 컬링 ----
+    int    m_quadtreeMaxLeafCells = 0;   // 0 = 기능 꺼짐 (1~4번 기법과 동일하게 동작)
+    bool   m_quadtreeDirty = true;
+    bool   m_quadtreeCullingEnabled = true;
+    bool   m_quadtreeDebugBoxesEnabled = false;
+    Quadtree::Tree m_quadtree;
+    ComPtr<ID3D11Buffer> m_quadtreeIndexBuffer;
+    size_t m_quadtreeVisibleLeafCount = 0;
+
+    // ---- 쿼드트리 디버그 박스 (매 프레임 보이는 리프 집합이 바뀌므로 동적 버퍼를 쓴다) ----
+    ComPtr<ID3D11Buffer> m_debugBoxVertexBuffer;
+    ComPtr<ID3D11Buffer> m_debugBoxIndexBuffer;
+    UINT  m_debugBoxVertexCapacity = 0;
+    UINT  m_debugBoxIndexCapacity = 0;
+    DirectX::XMFLOAT4 m_debugBoxColor{ 1.0f, 0.85f, 0.15f, 1.0f };
 
     // ---- D3D 리소스 ----
     ComPtr<ID3D11VertexShader>   m_vertexShader;
