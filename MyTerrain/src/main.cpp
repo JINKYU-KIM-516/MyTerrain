@@ -7,6 +7,7 @@
 #include "App/Techniques/Technique03_HeightMap.h"
 #include "App/Techniques/Technique04_TextureSplatting.h"
 #include "App/Techniques/Technique05_QuadtreeCulling.h"
+#include "App/Techniques/Technique06_DistanceLOD.h"
 
 // ------------------------------------------------------------
 // Terrain Showcase System - 진입점
@@ -56,6 +57,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     app.RegisterTechnique(L"높이맵 지형", L"Heightmap Terrain", &BuildHeightMapScene);
     app.RegisterTechnique(L"텍스처 스플래팅", L"Texture Splatting", &BuildTextureSplattingScene);
     app.RegisterTechnique(L"쿼드트리 컬링", L"Quadtree Culling", &BuildQuadtreeCullingScene);
+    app.RegisterTechnique(L"거리 기반 LOD 지형1", L"Distance LOD 1", &BuildDistanceLODScene);
     // ...
 
     // 메뉴 화면 구성

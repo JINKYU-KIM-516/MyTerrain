@@ -136,6 +136,9 @@
     <ClCompile Include="src\Terrain\Quadtree.cpp" />
     <ClCompile Include="src\Components\QuadtreeControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique05_QuadtreeCulling.cpp" />
+    <ClCompile Include="src\Terrain\TerrainLOD.cpp" />
+    <ClCompile Include="src\Components\LodControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique06_DistanceLOD.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -176,6 +179,9 @@
     <ClInclude Include="src\Terrain\Quadtree.h" />
     <ClInclude Include="src\Components\QuadtreeControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique05_QuadtreeCulling.h" />
+    <ClInclude Include="src\Terrain\TerrainLOD.h" />
+    <ClInclude Include="src\Components\LodControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique06_DistanceLOD.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로

@@ -13,6 +13,23 @@ using namespace DirectX;
 namespace
 {
     constexpr wchar_t kShaderFile[] = L"BasicTerrain.hlsl";
+
+    // LOD 레벨 색상 (6-1 기법의 "K" 색상 모드). 셰이더를 고치지 않고 gBaseColor 자리에
+    // 그대로 밀어 넣는다 -- 체커 분기가 gBaseColor 를 바탕으로 명암을 만들기 때문에
+    // 조명/체커가 살아 있는 채로 레벨만 색으로 구분된다.
+    const XMFLOAT4& LodLevelColor(int level)
+    {
+        static const XMFLOAT4 kColors[TerrainLOD::kMaxLevels] =
+        {
+            { 0.36f, 0.72f, 0.38f, 1.0f },   // 0 : 초록 (풀 해상도)
+            { 0.85f, 0.80f, 0.30f, 1.0f },   // 1 : 노랑
+            { 0.90f, 0.56f, 0.24f, 1.0f },   // 2 : 주황
+            { 0.86f, 0.33f, 0.28f, 1.0f },   // 3 : 빨강
+            { 0.62f, 0.40f, 0.76f, 1.0f },   // 4 : 보라 (가장 거침)
+        };
+
+        return kColors[std::clamp(level, 0, TerrainLOD::kMaxLevels - 1)];
+    }
 }
 
 const wchar_t* ToDisplayName(TerrainDisplayMode mode)
@@ -52,6 +69,14 @@ void TerrainRenderer::Destroy()
     m_quadtreeIndexBuffer.Reset();
     m_quadtree = Quadtree::Tree{};
     m_quadtreeDirty = true;
+
+    m_lodIndexBuffer.Reset();
+    m_lodGrid = TerrainLOD::Grid{};
+    m_lodLevels.clear();
+    m_lodDrawList.clear();
+    m_lodDrawnChunkCount = 0;
+    m_lodDrawnTriangleCount = 0;
+    m_lodDirty = true;
 
     m_debugBoxVertexBuffer.Reset();
     m_debugBoxIndexBuffer.Reset();
@@ -121,6 +146,46 @@ void TerrainRenderer::SetQuadtreeLeafSize(int maxLeafCells)
 
     m_quadtreeMaxLeafCells = maxLeafCells;
     m_quadtreeDirty = true;
+}
+
+void TerrainRenderer::SetLodChunkSize(int cells)
+{
+    cells = std::max(cells, 1);
+    if (m_lodChunkCells == cells)
+    {
+        return;
+    }
+
+    m_lodChunkCells = cells;
+    m_lodDirty = true;
+}
+
+void TerrainRenderer::SetLodLevelCount(int count)
+{
+    count = std::clamp(count, 1, TerrainLOD::kMaxLevels);
+    if (m_lodLevelCount == count)
+    {
+        return;
+    }
+
+    m_lodLevelCount = count;
+    m_lodDirty = true;
+}
+
+void TerrainRenderer::SetLodBaseDistance(float distance)
+{
+    // 거리는 매 프레임 선택에만 쓰이므로 인덱스를 다시 만들 필요가 없다 (즉시 반영된다).
+    m_lodBaseDistance = std::max(distance, 1.0f);
+}
+
+int TerrainRenderer::GetLodChunksAtLevel(int level) const
+{
+    if (level < 0 || level >= TerrainLOD::kMaxLevels)
+    {
+        return 0;
+    }
+
+    return m_lodLevelHistogram[level];
 }
 
 void TerrainRenderer::CycleDisplayMode()
@@ -285,6 +350,7 @@ bool TerrainRenderer::RebuildMesh()
     // (쿼드트리 재구성용 -- 리프 크기만 바뀌었을 때 높이를 다시 계산하지 않기 위해서다).
     m_cpuMesh = std::move(mesh);
     m_quadtreeDirty = true;
+    m_lodDirty = true;
 
     m_meshDirty = false;
     return true;
@@ -342,6 +408,158 @@ bool TerrainRenderer::RebuildQuadtreeIndexBuffer()
     return true;
 }
 
+bool TerrainRenderer::RebuildLodIndexBuffer()
+{
+    Framework* framework = Framework::GetInstance();
+    if (framework == nullptr)
+    {
+        return false;
+    }
+
+    ID3D11Device* device = framework->GetRenderer().GetDevice();
+    if (device == nullptr)
+    {
+        return false;
+    }
+
+    m_lodIndexBuffer.Reset();
+    m_lodLevels.clear();
+    m_lodDrawList.clear();
+
+    if (m_lodChunkCells <= 0 || m_cpuMesh.vertices.empty())
+    {
+        // 기능이 꺼져 있거나(0) 아직 메시가 없으면 비워두고 끝낸다 -- Render() 는
+        // m_lodChunkCells <= 0 이면 이 격자를 아예 쳐다보지 않는다.
+        m_lodGrid = TerrainLOD::Grid{};
+        m_lodDirty = false;
+        return true;
+    }
+
+    m_lodGrid = TerrainLOD::Build(m_cpuMesh, m_lodChunkCells, m_lodLevelCount);
+
+    if (m_lodGrid.indices.empty())
+    {
+        m_lodDirty = false;
+        return true;
+    }
+
+    // 모든 레벨의 인덱스를 한 번에 담은 정적 버퍼. 매 프레임 다시 채우지 않는다.
+    D3D11_BUFFER_DESC ibDesc = {};
+    ibDesc.ByteWidth = static_cast<UINT>(sizeof(uint32_t) * m_lodGrid.indices.size());
+    ibDesc.Usage = D3D11_USAGE_IMMUTABLE;
+    ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA ibData = {};
+    ibData.pSysMem = m_lodGrid.indices.data();
+
+    const HRESULT hr = device->CreateBuffer(&ibDesc, &ibData, &m_lodIndexBuffer);
+    if (FAILED(hr))
+    {
+        m_lodGrid = TerrainLOD::Grid{};
+        return false;
+    }
+
+    m_lodDirty = false;
+    return true;
+}
+
+void TerrainRenderer::UpdateLodSelection(const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition)
+{
+    const size_t chunkCount = m_lodGrid.chunks.size();
+
+    // 프리즈를 막 켠 프레임에 그때의 카메라 위치를 붙잡아 둔다.
+    if (m_lodFreezeRequested)
+    {
+        m_lodFrozenCameraPosition = cameraPosition;
+        m_lodFreezeRequested = false;
+    }
+
+    const XMFLOAT3 lodOrigin = m_lodFrozen ? m_lodFrozenCameraPosition : cameraPosition;
+
+    // ---- 1) 청크마다 거리로 레벨을 정한다 ----
+    m_lodLevels.assign(chunkCount, 0);
+
+    if (m_lodEnabled)
+    {
+        for (size_t i = 0; i < chunkCount; ++i)
+        {
+            const float distance = TerrainLOD::DistanceToBounds(m_lodGrid.chunks[i].bounds, lodOrigin);
+            m_lodLevels[i] = TerrainLOD::SelectLevel(distance, m_lodBaseDistance, m_lodGrid.levelCount);
+        }
+
+        if (m_lodNeighborClampEnabled)
+        {
+            TerrainLOD::ClampNeighborLevels(m_lodGrid, m_lodLevels);
+        }
+    }
+
+    // ---- 2) 절두체 컬링 ----
+    // 프리즈 중이어도 컬링은 "지금" 카메라를 그대로 따라간다 -- 레벨을 얼려둔 채
+    // 경계까지 날아가서 이음매를 코앞에서 볼 수 있어야 하기 때문이다.
+    Frustum frustum;
+    if (m_lodFrustumCullingEnabled)
+    {
+        frustum.ExtractFromViewProjection(viewProj);
+    }
+
+    m_lodDrawList.clear();
+    m_lodDrawList.reserve(chunkCount);
+
+    for (int& count : m_lodLevelHistogram)
+    {
+        count = 0;
+    }
+    m_lodDrawnTriangleCount = 0;
+
+    for (size_t i = 0; i < chunkCount; ++i)
+    {
+        const TerrainLOD::Chunk& chunk = m_lodGrid.chunks[i];
+
+        if (m_lodFrustumCullingEnabled &&
+            !frustum.IntersectsAABB(chunk.bounds.min, chunk.bounds.max))
+        {
+            continue;
+        }
+
+        const int level = std::clamp(m_lodLevels[i], 0, TerrainLOD::kMaxLevels - 1);
+
+        m_lodDrawList.push_back(static_cast<int>(i));
+        ++m_lodLevelHistogram[level];
+        m_lodDrawnTriangleCount += chunk.indexCount[level] / 3;
+    }
+
+    m_lodDrawnChunkCount = m_lodDrawList.size();
+}
+
+void TerrainRenderer::DrawLodChunks(ID3D11DeviceContext* context, const XMMATRIX& world,
+                                    const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition,
+                                    const XMFLOAT4& baseColor, bool useLighting, bool allowLevelColor)
+{
+    const bool levelColor = allowLevelColor && m_lodColorMode;
+
+    if (!levelColor)
+    {
+        // 색이 하나면 상수 버퍼는 한 번만 올리고 Draw 만 반복한다.
+        UpdateConstantBuffer(context, world, viewProj, cameraPosition, baseColor, useLighting);
+    }
+
+    for (int chunkIndex : m_lodDrawList)
+    {
+        const TerrainLOD::Chunk& chunk = m_lodGrid.chunks[chunkIndex];
+        const int level = std::clamp(m_lodLevels[chunkIndex], 0, TerrainLOD::kMaxLevels - 1);
+
+        if (levelColor)
+        {
+            // 청크마다 색이 다르므로 그때그때 상수 버퍼를 다시 올린다.
+            // (청크가 수백 개 수준이라 Map/DISCARD 비용은 문제되지 않는다)
+            UpdateConstantBuffer(context, world, viewProj, cameraPosition,
+                                 LodLevelColor(level), useLighting);
+        }
+
+        context->DrawIndexed(chunk.indexCount[level], chunk.indexStart[level], 0);
+    }
+}
+
 void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
                                            const XMMATRIX& world,
                                            const XMMATRIX& viewProj,
@@ -397,7 +615,31 @@ void TerrainRenderer::RenderDebugBoxes(ID3D11DeviceContext* context, const XMMAT
                                        const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition,
                                        const std::vector<int>& visibleLeaves)
 {
-    if (visibleLeaves.empty())
+    // 5번 쿼드트리 컬링용 얇은 래퍼 -- 보이는 리프의 AABB 만 모아서 공용 박스 렌더러에 넘긴다.
+    // (6-1 LOD 기법도 같은 렌더러로 청크 박스를 그린다)
+    std::vector<std::pair<XMFLOAT3, XMFLOAT3>> boxes;
+    boxes.reserve(visibleLeaves.size());
+
+    for (int leafIndex : visibleLeaves)
+    {
+        if (leafIndex < 0 || static_cast<size_t>(leafIndex) >= m_quadtree.leaves.size())
+        {
+            continue;
+        }
+
+        const Quadtree::Leaf& leaf = m_quadtree.leaves[leafIndex];
+        boxes.emplace_back(leaf.bounds.min, leaf.bounds.max);
+    }
+
+    RenderBoxLines(context, world, viewProj, cameraPosition, boxes, m_debugBoxColor);
+}
+
+void TerrainRenderer::RenderBoxLines(ID3D11DeviceContext* context, const XMMATRIX& world,
+                                     const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition,
+                                     const std::vector<std::pair<XMFLOAT3, XMFLOAT3>>& boxes,
+                                     const XMFLOAT4& color)
+{
+    if (boxes.empty())
     {
         return;
     }
@@ -427,19 +669,13 @@ void TerrainRenderer::RenderDebugBoxes(ID3D11DeviceContext* context, const XMMAT
 
     std::vector<GridMesh::Vertex> boxVertices;
     std::vector<uint32_t> boxIndices;
-    boxVertices.reserve(visibleLeaves.size() * 8);
-    boxIndices.reserve(visibleLeaves.size() * 24);
+    boxVertices.reserve(boxes.size() * 8);
+    boxIndices.reserve(boxes.size() * 24);
 
-    for (int leafIndex : visibleLeaves)
+    for (const auto& box : boxes)
     {
-        if (leafIndex < 0 || static_cast<size_t>(leafIndex) >= m_quadtree.leaves.size())
-        {
-            continue;
-        }
-
-        const Quadtree::Leaf& leaf = m_quadtree.leaves[leafIndex];
-        const XMFLOAT3& mn = leaf.bounds.min;
-        const XMFLOAT3& mx = leaf.bounds.max;
+        const XMFLOAT3& mn = box.first;
+        const XMFLOAT3& mx = box.second;
 
         const XMFLOAT3 corners[8] =
         {
@@ -524,7 +760,7 @@ void TerrainRenderer::RenderDebugBoxes(ID3D11DeviceContext* context, const XMMAT
     context->Unmap(m_debugBoxIndexBuffer.Get(), 0);
 
     // ---- 그리기 (기존 셰이더/입력 레이아웃 재사용, 토폴로지만 선분으로) ----
-    UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_debugBoxColor, false);
+    UpdateConstantBuffer(context, world, viewProj, cameraPosition, color, false);
 
     UINT stride = sizeof(GridMesh::Vertex);
     UINT offset = 0;
@@ -578,6 +814,13 @@ void TerrainRenderer::Render()
         RebuildQuadtreeIndexBuffer();
     }
 
+    // 거리 LOD 기능을 쓰는 기법(6-1)에서만, 그리고 청크 크기/레벨 수가 바뀌었을 때만
+    // 다시 만든다. 기능을 쓰지 않는 1~5번 기법은 m_lodChunkCells 가 0 이라 들어오지 않는다.
+    if (m_lodChunkCells > 0 && m_lodDirty)
+    {
+        RebuildLodIndexBuffer();
+    }
+
     if (!m_vertexBuffer || !m_indexBuffer || m_indexCount == 0)
     {
         return;
@@ -617,6 +860,22 @@ void TerrainRenderer::Render()
     // 꺼져 있으면(기본 스위치는 켜짐) 1~4번 기법과 완전히 같은 단일 Draw 경로로 되돌아간다.
     const bool useQuadtreeDraw = quadtreeAvailable && m_quadtreeCullingEnabled;
 
+    // ---------------- 거리 기반 LOD : 이번 프레임에 그릴 청크와 레벨 ----------------
+    // LOD 스위치(L)를 꺼도 청크 단위로 나눠 그리는 것 자체는 유지한다 -- Draw 호출 수를
+    // 그대로 둔 채 삼각형 수만 비교해야 LOD 의 이득이 정확히 보이기 때문이다.
+    const bool lodAvailable = (m_lodChunkCells > 0) && !m_lodGrid.IsEmpty() && m_lodIndexBuffer;
+
+    if (lodAvailable)
+    {
+        UpdateLodSelection(viewProj, cameraPosition);
+    }
+    else
+    {
+        m_lodDrawList.clear();
+        m_lodDrawnChunkCount = 0;
+        m_lodDrawnTriangleCount = 0;
+    }
+
     // ---------------- 파이프라인 설정 ----------------
     // Direct2D 텍스트 렌더링이 상태를 바꿔놓으므로 매 프레임 전부 다시 지정한다
     UINT stride = sizeof(GridMesh::Vertex);
@@ -624,8 +883,17 @@ void TerrainRenderer::Render()
 
     context->IASetInputLayout(m_inputLayout.Get());
     context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
-    context->IASetIndexBuffer(useQuadtreeDraw ? m_quadtreeIndexBuffer.Get() : m_indexBuffer.Get(),
-                              DXGI_FORMAT_R32_UINT, 0);
+    ID3D11Buffer* activeIndexBuffer = m_indexBuffer.Get();
+    if (lodAvailable)
+    {
+        activeIndexBuffer = m_lodIndexBuffer.Get();
+    }
+    else if (useQuadtreeDraw)
+    {
+        activeIndexBuffer = m_quadtreeIndexBuffer.Get();
+    }
+
+    context->IASetIndexBuffer(activeIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
@@ -661,11 +929,16 @@ void TerrainRenderer::Render()
     // ---------------- 솔리드 패스 ----------------
     if (m_displayMode != TerrainDisplayMode::Wireframe)
     {
-        UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_solidColor, true);
         context->RSSetState(m_solidRasterizer.Get());
 
-        if (useQuadtreeDraw)
+        if (lodAvailable)
         {
+            DrawLodChunks(context, world, viewProj, cameraPosition, m_solidColor, true, true);
+        }
+        else if (useQuadtreeDraw)
+        {
+            UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_solidColor, true);
+
             for (int leafIndex : visibleLeaves)
             {
                 const Quadtree::Leaf& leaf = m_quadtree.leaves[leafIndex];
@@ -674,6 +947,7 @@ void TerrainRenderer::Render()
         }
         else
         {
+            UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_solidColor, true);
             context->DrawIndexed(m_indexCount, 0, 0);
         }
     }
@@ -681,11 +955,17 @@ void TerrainRenderer::Render()
     // ---------------- 와이어프레임 패스 ----------------
     if (m_displayMode != TerrainDisplayMode::Solid)
     {
-        UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_wireColor, false);
         context->RSSetState(m_wireRasterizer.Get());
 
-        if (useQuadtreeDraw)
+        if (lodAvailable)
         {
+            // 와이어는 단색이어야 격자 밀도 차이가 잘 보이므로 레벨 색상은 쓰지 않는다.
+            DrawLodChunks(context, world, viewProj, cameraPosition, m_wireColor, false, false);
+        }
+        else if (useQuadtreeDraw)
+        {
+            UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_wireColor, false);
+
             for (int leafIndex : visibleLeaves)
             {
                 const Quadtree::Leaf& leaf = m_quadtree.leaves[leafIndex];
@@ -694,6 +974,7 @@ void TerrainRenderer::Render()
         }
         else
         {
+            UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_wireColor, false);
             context->DrawIndexed(m_indexCount, 0, 0);
         }
     }
@@ -702,6 +983,21 @@ void TerrainRenderer::Render()
     if (m_quadtreeDebugBoxesEnabled && quadtreeAvailable)
     {
         RenderDebugBoxes(context, world, viewProj, cameraPosition, visibleLeaves);
+    }
+
+    // ---------------- LOD 청크 박스 ----------------
+    if (m_lodDebugBoxesEnabled && lodAvailable)
+    {
+        std::vector<std::pair<XMFLOAT3, XMFLOAT3>> boxes;
+        boxes.reserve(m_lodDrawList.size());
+
+        for (int chunkIndex : m_lodDrawList)
+        {
+            const TerrainLOD::Chunk& chunk = m_lodGrid.chunks[chunkIndex];
+            boxes.emplace_back(chunk.bounds.min, chunk.bounds.max);
+        }
+
+        RenderBoxLines(context, world, viewProj, cameraPosition, boxes, m_debugBoxColor);
     }
 
     // 다음에 그릴 것들을 위해 기본 상태로 돌려놓는다

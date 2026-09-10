@@ -2,10 +2,12 @@
 #include "../GameObject/Component.h"
 #include "GridMesh.h"
 #include "Quadtree.h"
+#include "TerrainLOD.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 // 지형 메시의 표시 방식
@@ -124,6 +126,58 @@ public:
     size_t GetQuadtreeNodeCount() const { return m_quadtree.nodes.size(); }
     size_t GetQuadtreeVisibleLeafCount() const { return m_quadtreeVisibleLeafCount; }
 
+    // ---------------- 거리 기반 LOD (6-1 기법에서 사용) ----------------
+    // 청크 한 변의 셀 수. 0 이면(기본) 이 기능은 완전히 비활성 상태로 남고
+    // 1~5번 기법은 이 코드 경로에 아예 들어오지 않는다.
+    // 값이 바뀌면 다음 렌더링 직전에 청크 격자만 다시 만든다 (메시는 다시 굽지 않는다).
+    void SetLodChunkSize(int cells);
+    int  GetLodChunkSize() const { return m_lodChunkCells; }
+
+    // 만들 LOD 레벨 수 (1 ~ TerrainLOD::kMaxLevels). 스텝이 청크 크기를 넘으면 내부에서 줄인다.
+    void SetLodLevelCount(int count);
+    int  GetLodLevelCount() const { return m_lodLevelCount; }
+
+    // 끄면 모든 청크를 레벨 0(풀 해상도)으로 그린다. 청크 단위로 나눠 그리는 것 자체는
+    // 그대로 두므로, 켜고 끌 때 Draw 호출 수는 그대로이고 삼각형 수만 달라진다
+    // -- LOD 의 이득만 따로 떼어 비교하기 위해서다.
+    void SetLodEnabled(bool enabled) { m_lodEnabled = enabled; }
+    bool IsLodEnabled() const { return m_lodEnabled; }
+
+    // 레벨 0 이 유지되는 거리. 이 거리를 넘으면 레벨 1, 그 두 배를 넘으면 레벨 2 ...
+    void SetLodBaseDistance(float distance);
+    float GetLodBaseDistance() const { return m_lodBaseDistance; }
+
+    // 켜면 청크를 레벨별 색으로 칠한다 (셰이더 수정 없이 gBaseColor 만 바꿔 넣는다).
+    void SetLodColorMode(bool enabled) { m_lodColorMode = enabled; }
+    bool IsLodColorMode() const { return m_lodColorMode; }
+
+    // 5번과 같은 절두체 컬링. LOD 와 독립적으로 켜고 끌 수 있다.
+    void SetLodFrustumCullingEnabled(bool enabled) { m_lodFrustumCullingEnabled = enabled; }
+    bool IsLodFrustumCullingEnabled() const { return m_lodFrustumCullingEnabled; }
+
+    // 켜면 그려지는 청크들의 AABB 를 선으로 겹쳐 그린다.
+    void SetLodDebugBoxesEnabled(bool enabled) { m_lodDebugBoxesEnabled = enabled; }
+    bool IsLodDebugBoxesEnabled() const { return m_lodDebugBoxesEnabled; }
+
+    // 켜면 이웃 청크와의 레벨 차이가 1 을 넘지 않게 낮춘다 (이음매 완화).
+    void SetLodNeighborClampEnabled(bool enabled) { m_lodNeighborClampEnabled = enabled; }
+    bool IsLodNeighborClampEnabled() const { return m_lodNeighborClampEnabled; }
+
+    // 켜는 순간의 카메라 위치로 레벨을 고정한다. 컬링은 계속 실제 카메라를 따라가므로
+    // 레벨 경계까지 날아가서 이음매를 코앞에서 관찰할 수 있다.
+    void SetLodFrozen(bool frozen) { m_lodFrozen = frozen; m_lodFreezeRequested = frozen; }
+    bool IsLodFrozen() const { return m_lodFrozen; }
+
+    // ---- 지난 프레임 기준 통계 (HUD 표시용) ----
+    size_t GetLodChunkCount() const { return m_lodGrid.chunks.size(); }
+    size_t GetLodDrawnChunkCount() const { return m_lodDrawnChunkCount; }
+    size_t GetLodDrawnTriangleCount() const { return m_lodDrawnTriangleCount; }
+    int    GetLodChunksAtLevel(int level) const;
+    int    GetLodActualLevelCount() const { return m_lodGrid.levelCount; }
+    size_t GetLodIndexCount() const { return m_lodGrid.indices.size(); }
+    size_t GetLodBaseIndexCount() const { return m_lodGrid.baseIndexCount; }
+
+
 private:
     // 셰이더 / 입력 레이아웃 / 래스터라이저 상태 / 상수 버퍼 생성 (최초 1회)
     bool CreateDeviceResources();
@@ -134,6 +188,32 @@ private:
     // m_cpuMesh 로부터 쿼드트리(및 재정렬된 인덱스 버퍼)를 다시 만든다.
     // m_quadtreeMaxLeafCells <= 0 이면(기능 미사용) 아무 것도 하지 않고 비운다.
     bool RebuildQuadtreeIndexBuffer();
+
+    // m_cpuMesh 로부터 LOD 청크 격자(및 레벨별 인덱스 버퍼)를 다시 만든다.
+    // m_lodChunkCells <= 0 이면(기능 미사용) 아무 것도 하지 않고 비운다.
+    bool RebuildLodIndexBuffer();
+
+    // 이번 프레임에 그릴 청크와 각 청크의 레벨을 정한다 (m_lodLevels / m_lodDrawList 갱신).
+    void UpdateLodSelection(const DirectX::XMMATRIX& viewProj, const DirectX::XMFLOAT3& cameraPosition);
+
+    // m_lodDrawList 를 청크마다 DrawIndexed 로 그린다.
+    //   allowLevelColor : 레벨 색상 모드를 허용할지 (와이어프레임 패스는 단색이어야 하므로 false)
+    void DrawLodChunks(ID3D11DeviceContext* context,
+                       const DirectX::XMMATRIX& world,
+                       const DirectX::XMMATRIX& viewProj,
+                       const DirectX::XMFLOAT3& cameraPosition,
+                       const DirectX::XMFLOAT4& baseColor,
+                       bool useLighting,
+                       bool allowLevelColor);
+
+    // AABB 목록을 선(LINELIST)으로 그린다. 기존 셰이더/입력 레이아웃을 그대로 재사용한다
+    // (GridMesh::Vertex 모양으로 박스 모서리를 채워 넣을 뿐).
+    void RenderBoxLines(ID3D11DeviceContext* context,
+                        const DirectX::XMMATRIX& world,
+                        const DirectX::XMMATRIX& viewProj,
+                        const DirectX::XMFLOAT3& cameraPosition,
+                        const std::vector<std::pair<DirectX::XMFLOAT3, DirectX::XMFLOAT3>>& boxes,
+                        const DirectX::XMFLOAT4& color);
 
     // 보이는 리프들의 AABB 를 선(LINELIST)으로 그린다. 기존 셰이더/입력 레이아웃을
     // 그대로 재사용한다 (GridMesh::Vertex 모양으로 박스 모서리를 채워 넣을 뿐).
@@ -223,6 +303,30 @@ private:
     Quadtree::Tree m_quadtree;
     ComPtr<ID3D11Buffer> m_quadtreeIndexBuffer;
     size_t m_quadtreeVisibleLeafCount = 0;
+
+    // ---- 거리 기반 LOD (6-1) ----
+    int    m_lodChunkCells = 0;    // 0 = 기능 꺼짐 (1~5번 기법과 동일하게 동작)
+    int    m_lodLevelCount = 4;
+    bool   m_lodDirty = true;
+    bool   m_lodEnabled = true;
+    bool   m_lodColorMode = false;
+    bool   m_lodFrustumCullingEnabled = true;
+    bool   m_lodDebugBoxesEnabled = false;
+    bool   m_lodNeighborClampEnabled = false;
+    bool   m_lodFrozen = false;
+    bool   m_lodFreezeRequested = false;   // 프리즈를 켠 첫 프레임에 카메라 위치를 붙잡기 위한 플래그
+    float  m_lodBaseDistance = 60.0f;
+    DirectX::XMFLOAT3 m_lodFrozenCameraPosition{ 0.0f, 0.0f, 0.0f };
+
+    TerrainLOD::Grid m_lodGrid;
+    ComPtr<ID3D11Buffer> m_lodIndexBuffer;
+
+    std::vector<int> m_lodLevels;      // 청크마다 이번 프레임에 쓸 레벨
+    std::vector<int> m_lodDrawList;    // 이번 프레임에 실제로 그릴 청크 인덱스
+
+    size_t m_lodDrawnChunkCount = 0;
+    size_t m_lodDrawnTriangleCount = 0;
+    int    m_lodLevelHistogram[TerrainLOD::kMaxLevels]{};
 
     // ---- 쿼드트리 디버그 박스 (매 프레임 보이는 리프 집합이 바뀌므로 동적 버퍼를 쓴다) ----
     ComPtr<ID3D11Buffer> m_debugBoxVertexBuffer;
