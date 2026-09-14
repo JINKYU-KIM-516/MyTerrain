@@ -18,9 +18,11 @@ namespace
     constexpr float kCornerMargin = 28.0f;  // 화면 모서리에서 떨어진 여백
 
     // 기법 목록 표시 문자열: "n. 기법명 (영어 기법명)"
+    // 기법이 직접 번호를 지정했으면(entry.number) 그것을, 아니면 등록 순서를 쓴다.
     std::wstring MakeMenuItemText(int index, const TechniqueEntry& entry)
     {
-        return std::to_wstring(index) + L". " + entry.nameKo + L" (" + entry.nameEn + L")";
+        const std::wstring number = entry.number.empty() ? std::to_wstring(index) : entry.number;
+        return number + L". " + entry.nameKo + L" (" + entry.nameEn + L")";
     }
 }
 
@@ -42,9 +44,10 @@ void ShowcaseApp::Initialize(Framework* framework)
 }
 
 void ShowcaseApp::RegisterTechnique(const std::wstring& nameKo, const std::wstring& nameEn,
-                                    const std::function<void(Scene&)>& build)
+                                    const std::function<void(Scene&)>& build,
+                                    const std::wstring& number)
 {
-    m_techniques.push_back({ nameKo, nameEn, build });
+    m_techniques.push_back({ number, nameKo, nameEn, build });
 }
 
 void ShowcaseApp::Start()

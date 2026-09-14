@@ -11,6 +11,7 @@ class Scene;
 // 클릭하면 build(scene)이 호출되어 해당 기법의 화면이 구성된다.
 struct TechniqueEntry
 {
+    std::wstring number;                     // 메뉴에 붙일 번호. 비워두면 등록 순서(0부터)를 쓴다
     std::wstring nameKo;                     // 한글 기법명
     std::wstring nameEn;                     // 영어 기법명
     std::function<void(Scene&)> build;       // 기법 화면(씬) 구성 함수
@@ -32,9 +33,17 @@ public:
 
     void Initialize(Framework* framework);
 
-    // 기법 등록. 등록 순서대로 메뉴에 0번부터 번호가 매겨진다.
+    // 기법 등록. 기본적으로 등록 순서대로 메뉴에 0번부터 번호가 매겨진다.
+    //
+    // number 를 넘기면 그 문자열이 번호 자리에 그대로 들어간다. 기법 목록의 번호와
+    // 등록 순서가 어긋날 때 쓴다 (예: 거리 LOD 는 6-1 / 6-2 로 두 화면이지만
+    // 등록은 두 번 하므로, 그냥 두면 6 / 7 로 표시된다).
+    //
+    // 주의: 한 번이라도 number 를 쓰면 그 뒤 기법들은 자동 번호가 한 칸씩 밀린다.
+    //       이후 기법들도 number 를 직접 넘기는 편이 안전하다.
     void RegisterTechnique(const std::wstring& nameKo, const std::wstring& nameEn,
-                           const std::function<void(Scene&)>& build);
+                           const std::function<void(Scene&)>& build,
+                           const std::wstring& number = L"");
 
     const std::vector<TechniqueEntry>& GetTechniques() const { return m_techniques; }
 

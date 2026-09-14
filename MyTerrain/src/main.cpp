@@ -28,6 +28,7 @@
 //      void BuildXXXScene(Scene& scene) 함수에서 GameObject를 구성한다.
 //   2) 아래 RegisterTechnique(...) 에 한 줄 추가한다.
 //      -> 메뉴에 자동으로 번호가 매겨져 표시되고 클릭 시 이동한다.
+//      -> 번호를 직접 정하고 싶으면 마지막 인자로 넘긴다 (예: L"6-1").
 // ------------------------------------------------------------
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
@@ -58,8 +59,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     app.RegisterTechnique(L"높이맵 지형", L"Heightmap Terrain", &BuildHeightMapScene);
     app.RegisterTechnique(L"텍스처 스플래팅", L"Texture Splatting", &BuildTextureSplattingScene);
     app.RegisterTechnique(L"쿼드트리 컬링", L"Quadtree Culling", &BuildQuadtreeCullingScene);
-    app.RegisterTechnique(L"거리 기반 LOD 지형1", L"Distance LOD 1", &BuildDistanceLODScene);
-    app.RegisterTechnique(L"고급 거리 LOD 지형2", L"Advanced Distance LOD 2", &BuildAdvancedLODScene);
+    // 거리 LOD 는 한 주제를 두 화면으로 나눈 것이라 메뉴 번호를 직접 지정한다.
+    // (그냥 두면 등록 순서대로 6 / 7 이 되어 기법 목록과 어긋난다)
+    // 이후 기법들도 마찬가지로 번호를 직접 넘기면 된다 -- 예: 테셀레이션은 L"7".
+    app.RegisterTechnique(L"거리 기반 LOD 지형1", L"Distance LOD 1", &BuildDistanceLODScene, L"6-1");
+    app.RegisterTechnique(L"고급 거리 LOD 지형2", L"Advanced Distance LOD 2", &BuildAdvancedLODScene, L"6-2");
     // ...
 
     // 메뉴 화면 구성
