@@ -9,6 +9,7 @@
 #include "App/Techniques/Technique05_QuadtreeCulling.h"
 #include "App/Techniques/Technique06_DistanceLOD.h"
 #include "App/Techniques/Technique06b_AdvancedLOD.h"
+#include "App/Techniques/Technique07_Tessellation.h"
 
 // ------------------------------------------------------------
 // Terrain Showcase System - 진입점
@@ -61,9 +62,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     app.RegisterTechnique(L"쿼드트리 컬링", L"Quadtree Culling", &BuildQuadtreeCullingScene);
     // 거리 LOD 는 한 주제를 두 화면으로 나눈 것이라 메뉴 번호를 직접 지정한다.
     // (그냥 두면 등록 순서대로 6 / 7 이 되어 기법 목록과 어긋난다)
-    // 이후 기법들도 마찬가지로 번호를 직접 넘기면 된다 -- 예: 테셀레이션은 L"7".
+    // 6-1 부터 번호를 직접 넘기기 시작했으므로, 이후 기법들도 계속 직접 넘긴다.
     app.RegisterTechnique(L"거리 기반 LOD 지형1", L"Distance LOD 1", &BuildDistanceLODScene, L"6-1");
     app.RegisterTechnique(L"고급 거리 LOD 지형2", L"Advanced Distance LOD 2", &BuildAdvancedLODScene, L"6-2");
+    app.RegisterTechnique(L"하드웨어 테셀레이션 지형", L"Hardware Tessellation", &BuildTessellationScene, L"7");
     // ...
 
     // 메뉴 화면 구성

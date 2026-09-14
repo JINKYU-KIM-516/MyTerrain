@@ -160,6 +160,15 @@
     <ClCompile Include="src\App\Techniques\Technique06b_AdvancedLOD.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\PatchGrid.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\TessellationControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique07_Tessellation.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -290,6 +299,15 @@
       <Filter>Components</Filter>
     </ClInclude>
     <ClInclude Include="src\App\Techniques\Technique06b_AdvancedLOD.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\PatchGrid.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\TessellationControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique07_Tessellation.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
   </ItemGroup>

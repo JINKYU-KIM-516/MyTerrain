@@ -52,7 +52,30 @@ cbuffer CBTerrain : register(b0)
     float4   gLodOrigin;
 };
 
+// 7번 하드웨어 테셀레이션 전용 상수. HS/DS 에서만 읽는다(PS 는 시각화 모드 하나만 본다).
+// CBTerrain 과 분리해 둔 이유는, 이 값들이 "패치" 개념에서만 의미가 있어서
+// 1~6번 기법과 완전히 무관하기 때문이다 -- 항상 바인딩해 두지만 테셀레이션을
+// 쓰지 않는 기법에서는 gTessOrigin.w 가 0 이라 PS 쪽 분기도 그냥 지나간다.
+cbuffer CBTessellation : register(b1)
+{
+    float4x4 gViewProj;          // 뷰 * 투영 (DS 가 월드 좌표를 클립 공간으로 바꿀 때 쓴다)
+
+    // x = 기준 거리(이 안쪽이면 최대 팩터), y = 최대 팩터, z = 최소 팩터, w = 예약
+    float4   gTessFactorParams;
+
+    // x = heightScale, y = heightOffset (HeightMap::Params 와 같은 값 -- DS 가 높이맵을
+    //     다시 샘플링해 정점을 밀어 올릴 때 0~1 값을 월드 높이로 바꾸는 데 쓴다)
+    // z = displacement 켬/끔 (0 = 끔 -> 코너 4개를 쌍선형 보간만 한, 완전히 매끈한 패치)
+    // w = 밀어 올린 뒤 법선을 다시 계산할 때 쓰는 월드 단위 샘플 간격(epsilon)
+    float4   gTessHeightParams;
+
+    // xyz = 팩터 계산 기준 위치 (프리즈 중이면 얼려둔 카메라 위치)
+    // w   = 팩터 시각화 모드 (0 = 끔, 1 = 켬 -> 파랑 낮음 / 빨강 높음)
+    float4   gTessOrigin;
+};
+
 // 높이맵 텍스처. 3·4번 기법에서 바인딩된다(모드가 둘 다 0이면 읽지 않는다).
+// 7번은 도메인 셰이더에서 같은 텍스처를 t0/s0 로 다시 읽어 정점을 밀어 올린다.
 Texture2D    gHeightMap    : register(t0);
 SamplerState gHeightMapSam : register(s0);
 
@@ -157,6 +180,176 @@ float SampleHeight01(float3 worldPos)
     uv.y = worldPos.z * gHeightMapParams.x * gHeightMapParams.y + 0.5f;
 
     return gHeightMap.SampleLevel(gHeightMapSam, uv, 0).r;
+}
+
+//=================================================================
+// 7. 하드웨어 테셀레이션 (VSPatch -> HS -> 테셀레이터(고정 기능) -> DS)
+//=================================================================
+// 1~6-1번은 VSMain 이 최종 클립 공간 좌표(SV_POSITION)까지 만들었다. 여기서는
+// VS 가 "월드 공간" 까지만 만들고(패치 컨트롤 포인트), 최종 좌표는 DS 가 만든다 --
+// 쌍선형 보간은 클립 공간이 아니라 월드 공간에서 해야 원근 나눗셈 전후가 뒤섞이지
+// 않는다(클립 공간 보간 후 투영하면 직선이 휘어 보인다).
+//
+// 컨트롤 포인트 4개의 순서는 PatchGrid::Build / GridMesh::Generate 의 i0,i1,i2,i3
+// 규약과 같다 : (u,v) = (0,0) (1,0) (0,1) (1,1). SV_DomainLocation 이 그대로 이
+// 순서의 쌍선형 보간 좌표가 된다.
+struct VSPatchOutput
+{
+    float3 worldPos    : POSITION;
+    float3 worldNormal : NORMAL;
+    float2 uv          : TEXCOORD0;
+};
+
+VSPatchOutput VSPatch(VSInput input)
+{
+    VSPatchOutput output;
+
+    output.worldPos = mul(float4(input.position, 1.0f), gWorld).xyz;
+    output.worldNormal = normalize(mul(input.normal, (float3x3)gWorld));
+    output.uv = input.uv;
+
+    return output;
+}
+
+//-----------------------------------------------------------------
+// 패치 상수 함수 : 변(edge) 4개 + 안쪽 팩터를 계산한다. 컨트롤 포인트당이 아니라
+// 패치당 한 번만 불린다.
+//
+// 이음매가 저절로 안 생기는 이유 : 변 하나의 팩터를 "그 변의 두 월드 좌표 끝점"
+// 만으로 계산하면, 그 변을 공유하는 이웃 패치도 같은 두 끝점을 넣고 같은 식을
+// 돌리므로 항상 같은 값이 나온다. 6-2 처럼 "누가 누구에게 맞출지" CPU 에서 조율할
+// 필요가 원천적으로 없다 -- 대신 이 함수는 반드시 그 변의 두 컨트롤 포인트만 보고
+// 계산해야 한다(패치 중심이나 다른 변 정보가 섞이면 대칭이 깨진다).
+//-----------------------------------------------------------------
+float TessEdgeFactor(float3 worldA, float3 worldB)
+{
+    float3 mid = (worldA + worldB) * 0.5f;
+    float  dist = distance(mid, gTessOrigin.xyz);
+
+    const float baseDistance = max(gTessFactorParams.x, 0.0001f);
+    const float maxFactor = gTessFactorParams.y;
+    const float minFactor = gTessFactorParams.z;
+
+    // 기준 거리 안쪽이면 최대 팩터, 그 뒤로는 거리에 반비례해서 줄어든다
+    // (정수/fractional_odd 파티션 모드가 이 연속값을 알아서 양자화한다 --
+    //  여기서 미리 floor 하지 않는 것이 핵심이다. 그래야 fractional 모드가
+    //  삼각형이 갑자기 나타나는 대신 한 점에서 자라나오게 부드럽게 만들어준다).
+    float factor = maxFactor * saturate(baseDistance / dist);
+    return clamp(factor, minFactor, maxFactor);
+}
+
+struct HSConstantOutput
+{
+    float edgeTess[4]   : SV_TessFactor;
+    float insideTess[2] : SV_InsideTessFactor;
+};
+
+HSConstantOutput PatchConstantHS(InputPatch<VSPatchOutput, 4> patch)
+{
+    HSConstantOutput output;
+
+    // SV_TessFactor 의 쿼드 도메인 규약 : [0]=(0,0)-(0,1) 변, [1]=(0,0)-(1,0) 변,
+    // [2]=(1,0)-(1,1) 변, [3]=(0,1)-(1,1) 변. 컨트롤 포인트 순서가 i0,i1,i2,i3 이므로
+    // 각각 (i0,i2) (i0,i1) (i1,i3) (i2,i3) 이다.
+    const float f0 = TessEdgeFactor(patch[0].worldPos, patch[2].worldPos);
+    const float f1 = TessEdgeFactor(patch[0].worldPos, patch[1].worldPos);
+    const float f2 = TessEdgeFactor(patch[1].worldPos, patch[3].worldPos);
+    const float f3 = TessEdgeFactor(patch[2].worldPos, patch[3].worldPos);
+
+    output.edgeTess[0] = f0;
+    output.edgeTess[1] = f1;
+    output.edgeTess[2] = f2;
+    output.edgeTess[3] = f3;
+
+    // 안쪽 팩터는 변 팩터의 평균으로 근사한다 (정확한 값이 아니어도 크랙이 없는
+    // 성질과는 무관하다 -- 그 성질은 오직 변 팩터가 이웃과 일치하는 것에서 온다).
+    const float inside = (f0 + f1 + f2 + f3) * 0.25f;
+    output.insideTess[0] = inside;
+    output.insideTess[1] = inside;
+
+    return output;
+}
+
+// partition 모드(integer / fractional_odd 등)는 HS 함수에 붙는 컴파일타임 속성이라
+// 런타임에 값 하나로 못 바꾼다. 그래서 몸통이 같은 HS 를 두 벌 컴파일해두고
+// TerrainRenderer 가 어느 쪽을 바인딩할지로 전환한다 (HSMain_Integer / HSMain_FracOdd).
+[domain("quad")]
+[partitioning("integer")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(4)]
+[patchconstantfunc("PatchConstantHS")]
+[maxtessfactor(64.0)]
+VSPatchOutput HSMain_Integer(InputPatch<VSPatchOutput, 4> patch, uint id : SV_OutputControlPointID)
+{
+    return patch[id];
+}
+
+[domain("quad")]
+[partitioning("fractional_odd")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(4)]
+[patchconstantfunc("PatchConstantHS")]
+[maxtessfactor(64.0)]
+VSPatchOutput HSMain_FracOdd(InputPatch<VSPatchOutput, 4> patch, uint id : SV_OutputControlPointID)
+{
+    return patch[id];
+}
+
+//-----------------------------------------------------------------
+// Domain Shader : 테셀레이터가 만든 (u,v) 마다 한 번씩 불린다.
+//-----------------------------------------------------------------
+[domain("quad")]
+PSInput DSMain(HSConstantOutput hsConst, float2 uv : SV_DomainLocation,
+              const OutputPatch<VSPatchOutput, 4> patch)
+{
+    PSInput output;
+
+    // ---- 위치 : 코너 4개를 (u,v) 로 쌍선형 보간 (i0,i1,i2,i3 = (0,0)(1,0)(0,1)(1,1)) ----
+    float3 top = lerp(patch[0].worldPos, patch[1].worldPos, uv.x);
+    float3 bottom = lerp(patch[2].worldPos, patch[3].worldPos, uv.x);
+    float3 worldPos = lerp(top, bottom, uv.y);
+
+    float3 topN = lerp(patch[0].worldNormal, patch[1].worldNormal, uv.x);
+    float3 bottomN = lerp(patch[2].worldNormal, patch[3].worldNormal, uv.x);
+    float3 normal = normalize(lerp(topN, bottomN, uv.y));
+
+    float2 topUV = lerp(patch[0].uv, patch[1].uv, uv.x);
+    float2 bottomUV = lerp(patch[2].uv, patch[3].uv, uv.x);
+    float2 texcoord = lerp(topUV, bottomUV, uv.y);
+
+    // ---- displacement : 코너 보간 대신 높이맵을 다시 샘플링한다 ----
+    // 코너만 보간하면(=꺼진 상태) 테셀레이션을 아무리 늘려도 매끈한 곡면 조각만
+    // 늘어날 뿐 새 지형 디테일은 안 생긴다. 실제로 더 촘촘해 보이려면 새로 생긴
+    // 정점마다 원본 높이맵을 다시 읽어야 한다.
+    if (gTessHeightParams.z > 0.5f)
+    {
+        const float h01 = SampleHeight01(worldPos);
+        worldPos.y = h01 * gTessHeightParams.x + gTessHeightParams.y;
+
+        // 법선도 다시 계산한다 (중앙 차분, 높이맵 4번 추가 샘플). 코너 법선을 그대로
+        // 쓰면 방금 밀어 올린 표면과 어긋나 음영이 이상해진다. epsilon 은
+        // gTessHeightParams.w (월드 단위) -- TessellationControlComponent 가 조절한다.
+        const float e = max(gTessHeightParams.w, 0.001f);
+        const float hL = SampleHeight01(worldPos + float3(-e, 0.0f, 0.0f)) * gTessHeightParams.x + gTessHeightParams.y;
+        const float hR = SampleHeight01(worldPos + float3(e, 0.0f, 0.0f)) * gTessHeightParams.x + gTessHeightParams.y;
+        const float hD = SampleHeight01(worldPos + float3(0.0f, 0.0f, -e)) * gTessHeightParams.x + gTessHeightParams.y;
+        const float hU = SampleHeight01(worldPos + float3(0.0f, 0.0f, e)) * gTessHeightParams.x + gTessHeightParams.y;
+
+        normal = normalize(float3(hL - hR, 2.0f * e, hD - hU));
+    }
+
+    output.position = mul(float4(worldPos, 1.0f), gViewProj);
+    output.worldPos = worldPos;
+    output.normal = normal;
+    output.uv = texcoord;
+
+    // PSMain 의 TEXCOORD2(morph) 자리를 그대로 빌려 쓴다 -- 6-2 의 morph 시각화와
+    // 같은 파랑->빨강 컬러맵을 팩터 시각화에도 재사용하기 위해서다 (아래 참고).
+    const float avgFactor = (hsConst.edgeTess[0] + hsConst.edgeTess[1] +
+                             hsConst.edgeTess[2] + hsConst.edgeTess[3]) * 0.25f;
+    output.morph = saturate(avgFactor / max(gTessFactorParams.y, 1.0f));
+
+    return output;
 }
 
 //---------------------------------------------------------------
@@ -267,6 +460,14 @@ float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET
 
     // ---- 6-2 morph 계수 시각화 : 0 = 파랑(아직 안 움직임), 1 = 빨강(다음 레벨과 같아짐) ----
     if (gLodOrigin.w > 0.5f)
+    {
+        albedo = lerp(float3(0.24f, 0.46f, 0.94f), float3(0.94f, 0.31f, 0.22f), saturate(input.morph));
+    }
+
+    // ---- 7번 테셀레이션 팩터 시각화 : 0 = 파랑(최소 팩터), 1 = 빨강(최대 팩터) ----
+    // DSMain 이 같은 TEXCOORD2(morph) 자리에 팩터를 정규화해서 넣어준다 -- 6-2 와
+    // 동시에 켜질 일이 없으므로(서로 다른 기법) 색만 재사용해도 안전하다.
+    if (gTessOrigin.w > 0.5f)
     {
         albedo = lerp(float3(0.24f, 0.46f, 0.94f), float3(0.94f, 0.31f, 0.22f), saturate(input.morph));
     }

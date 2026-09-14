@@ -92,6 +92,20 @@ void TerrainRenderer::Destroy()
     m_debugBoxVertexCapacity = 0;
     m_debugBoxIndexCapacity = 0;
 
+    m_tessVertexShader.Reset();
+    m_hullShaderInteger.Reset();
+    m_hullShaderFracOdd.Reset();
+    m_domainShader.Reset();
+    m_tessConstantBuffer.Reset();
+    m_patchIndexBuffer.Reset();
+    m_patchGrid = PatchGrid::Grid{};
+    m_tessDrawList.clear();
+    m_tessDrawnPatchCount = 0;
+    m_tessEstimatedTriangleCount = 0;
+    m_tessPipelineReady = false;
+    m_tessPipelineFailed = false;
+    m_tessPatchGridDirty = true;
+
     m_resourcesReady = false;
     m_meshDirty = true;
 }
@@ -194,6 +208,44 @@ void TerrainRenderer::SetLodBaseDistance(float distance)
     m_lodBaseDistance = std::max(distance, 1.0f);
 }
 
+void TerrainRenderer::SetTessellationEnabled(bool enabled)
+{
+    if (m_tessellationEnabled == enabled)
+    {
+        return;
+    }
+
+    m_tessellationEnabled = enabled;
+    m_tessPatchGridDirty = true;
+}
+
+void TerrainRenderer::SetTessFactorRange(float minFactor, float maxFactor)
+{
+    // D3D11 하드웨어 테셀레이션 팩터의 범위는 [1, 64] 다.
+    minFactor = std::clamp(minFactor, 1.0f, 64.0f);
+    maxFactor = std::clamp(std::max(maxFactor, minFactor), 1.0f, 64.0f);
+
+    m_tessMinFactor = minFactor;
+    m_tessMaxFactor = maxFactor;
+}
+
+void TerrainRenderer::SetTessBaseDistance(float distance)
+{
+    // 거리는 매 프레임 상수 버퍼에만 실리므로 패치 넷을 다시 만들 필요가 없다.
+    m_tessBaseDistance = std::max(distance, 1.0f);
+}
+
+void TerrainRenderer::SetTessHeightMapScale(float heightScale, float heightOffset)
+{
+    m_tessHeightScale = heightScale;
+    m_tessHeightOffset = heightOffset;
+}
+
+void TerrainRenderer::SetTessNormalEpsilon(float epsilon)
+{
+    m_tessNormalEpsilon = std::max(epsilon, 0.001f);
+}
+
 int TerrainRenderer::GetLodChunksAtLevel(int level) const
 {
     if (level < 0 || level >= TerrainLOD::kMaxLevels)
@@ -272,6 +324,23 @@ bool TerrainRenderer::CreateDeviceResources()
     cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
     hr = device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+    if (FAILED(hr)) return false;
+
+    // 7번 하드웨어 테셀레이션용 상수 버퍼. 1~6번 기법에서도 PS 가 항상 이 버퍼를
+    // 참조하므로(꺼져 있으면 gTessOrigin.w == 0) 항상 만들어 두고, 초기값을 0 으로
+    // 명시해서(CreateBuffer 에 초기 데이터를 안 주면 내용이 정의되지 않는다) 테셀레이션을
+    // 켠 적이 없는 기법에서 시각화 분기가 우연히 켜지는 일이 없게 한다.
+    TessConstants tessZeroInit{};
+    D3D11_SUBRESOURCE_DATA tessCbInitData = {};
+    tessCbInitData.pSysMem = &tessZeroInit;
+
+    D3D11_BUFFER_DESC tessCbDesc = {};
+    tessCbDesc.ByteWidth = sizeof(TessConstants);
+    tessCbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    tessCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    tessCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    hr = device->CreateBuffer(&tessCbDesc, &tessCbInitData, &m_tessConstantBuffer);
     if (FAILED(hr)) return false;
 
     // ---------------- 래스터라이저 상태 ----------------
@@ -369,6 +438,7 @@ bool TerrainRenderer::RebuildMesh()
     m_cpuMesh = std::move(mesh);
     m_quadtreeDirty = true;
     m_lodDirty = true;
+    m_tessPatchGridDirty = true;
 
     m_meshDirty = false;
     return true;
@@ -808,6 +878,358 @@ void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
     context->Unmap(m_constantBuffer.Get(), 0);
 }
 
+//=====================================================================
+// 7. 하드웨어 테셀레이션
+//=====================================================================
+bool TerrainRenderer::CreateTessellationPipelineResources()
+{
+    Framework* framework = Framework::GetInstance();
+    if (framework == nullptr)
+    {
+        return false;
+    }
+
+    ID3D11Device* device = framework->GetRenderer().GetDevice();
+    if (device == nullptr)
+    {
+        return false;
+    }
+
+    // 실패해도 CreateDeviceResources() 자체는 건드리지 않는다 -- 1~6번 기법은
+    // 이 함수를 아예 호출하지 않으므로(SetTessellationEnabled 를 켠 적이 없으면)
+    // 여기서 무슨 일이 있어도 영향받지 않는다.
+    std::wstring error;
+
+    ShaderUtil::ComPtr<ID3DBlob> vsBlob =
+        ShaderUtil::CompileFromFile(kShaderFile, "VSPatch", "vs_5_0", &error);
+    if (!vsBlob)
+    {
+        ShaderUtil::ReportErrorOnce(L"[7번 테셀레이션] " + error);
+        m_tessPipelineFailed = true;
+        return false;
+    }
+
+    ShaderUtil::ComPtr<ID3DBlob> hsIntBlob =
+        ShaderUtil::CompileFromFile(kShaderFile, "HSMain_Integer", "hs_5_0", &error);
+    if (!hsIntBlob)
+    {
+        ShaderUtil::ReportErrorOnce(L"[7번 테셀레이션] " + error);
+        m_tessPipelineFailed = true;
+        return false;
+    }
+
+    ShaderUtil::ComPtr<ID3DBlob> hsFracBlob =
+        ShaderUtil::CompileFromFile(kShaderFile, "HSMain_FracOdd", "hs_5_0", &error);
+    if (!hsFracBlob)
+    {
+        ShaderUtil::ReportErrorOnce(L"[7번 테셀레이션] " + error);
+        m_tessPipelineFailed = true;
+        return false;
+    }
+
+    ShaderUtil::ComPtr<ID3DBlob> dsBlob =
+        ShaderUtil::CompileFromFile(kShaderFile, "DSMain", "ds_5_0", &error);
+    if (!dsBlob)
+    {
+        ShaderUtil::ReportErrorOnce(L"[7번 테셀레이션] " + error);
+        m_tessPipelineFailed = true;
+        return false;
+    }
+
+    HRESULT hr = device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+                                            nullptr, &m_tessVertexShader);
+    if (FAILED(hr)) { m_tessPipelineFailed = true; return false; }
+
+    hr = device->CreateHullShader(hsIntBlob->GetBufferPointer(), hsIntBlob->GetBufferSize(),
+                                  nullptr, &m_hullShaderInteger);
+    if (FAILED(hr)) { m_tessPipelineFailed = true; return false; }
+
+    hr = device->CreateHullShader(hsFracBlob->GetBufferPointer(), hsFracBlob->GetBufferSize(),
+                                  nullptr, &m_hullShaderFracOdd);
+    if (FAILED(hr)) { m_tessPipelineFailed = true; return false; }
+
+    hr = device->CreateDomainShader(dsBlob->GetBufferPointer(), dsBlob->GetBufferSize(),
+                                    nullptr, &m_domainShader);
+    if (FAILED(hr)) { m_tessPipelineFailed = true; return false; }
+
+    m_tessPipelineReady = true;
+    return true;
+}
+
+bool TerrainRenderer::RebuildPatchIndexBuffer()
+{
+    Framework* framework = Framework::GetInstance();
+    if (framework == nullptr)
+    {
+        return false;
+    }
+
+    ID3D11Device* device = framework->GetRenderer().GetDevice();
+    if (device == nullptr)
+    {
+        return false;
+    }
+
+    m_patchIndexBuffer.Reset();
+
+    if (!m_tessellationEnabled || m_cpuMesh.vertices.empty())
+    {
+        m_patchGrid = PatchGrid::Grid{};
+        m_tessPatchGridDirty = false;
+        return true;
+    }
+
+    m_patchGrid = PatchGrid::Build(m_cpuMesh);
+
+    if (m_patchGrid.indices.empty())
+    {
+        m_tessPatchGridDirty = false;
+        return true;
+    }
+
+    // 통짜 정적 버퍼 하나로 모든 패치를 담는다 (6-1 의 m_lodIndexBuffer 와 같은 자리 --
+    // 다만 여기는 레벨이 없으니 패치당 인덱스 4개가 전부다).
+    D3D11_BUFFER_DESC ibDesc = {};
+    ibDesc.ByteWidth = static_cast<UINT>(sizeof(uint32_t) * m_patchGrid.indices.size());
+    ibDesc.Usage = D3D11_USAGE_IMMUTABLE;
+    ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA ibData = {};
+    ibData.pSysMem = m_patchGrid.indices.data();
+
+    const HRESULT hr = device->CreateBuffer(&ibDesc, &ibData, &m_patchIndexBuffer);
+    if (FAILED(hr))
+    {
+        m_patchGrid = PatchGrid::Grid{};
+        return false;
+    }
+
+    m_tessPatchGridDirty = false;
+    return true;
+}
+
+void TerrainRenderer::UpdateTessPatchSelection(const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition)
+{
+    const size_t patchCount = m_patchGrid.patches.size();
+
+    // 프리즈를 막 켠 프레임에 그때의 카메라 위치를 붙잡아 둔다 (6-1 의 F 와 같은 방식).
+    if (m_tessFreezeRequested)
+    {
+        m_tessFrozenCameraPosition = cameraPosition;
+        m_tessFreezeRequested = false;
+    }
+
+    const XMFLOAT3 origin = m_tessFrozen ? m_tessFrozenCameraPosition : cameraPosition;
+
+    // 컬링은 프리즈 중이어도 "지금" 카메라를 그대로 따라간다.
+    Frustum frustum;
+    if (m_tessFrustumCullingEnabled)
+    {
+        frustum.ExtractFromViewProjection(viewProj);
+    }
+
+    m_tessDrawList.clear();
+    m_tessDrawList.reserve(patchCount);
+    m_tessEstimatedTriangleCount = 0;
+
+    // displacement 가 켜져 있으면 코너 4개만으로 잰 AABB 가 실제 표면(밀어 올려진 높이)을
+    // 다 못 덮을 수 있으므로 y 범위에 heightScale 만큼 여유를 둔다. 그래도 코너 넷에
+    // 전혀 걸리지 않는 극단적으로 뾰족한 봉우리 하나는 컬링에서 잘릴 수 있다 -- 패치를
+    // 잘게 쪼갤수록(분할 수를 올릴수록) 코너가 촘촘해져서 이 근사가 덜 거칠어진다.
+    const float yPad = m_tessDisplacementEnabled ? std::abs(m_tessHeightScale) : 0.0f;
+
+    for (size_t i = 0; i < patchCount; ++i)
+    {
+        const PatchGrid::Patch& patch = m_patchGrid.patches[i];
+
+        if (m_tessFrustumCullingEnabled)
+        {
+            XMFLOAT3 mn = patch.bounds.min;
+            XMFLOAT3 mx = patch.bounds.max;
+            mn.y -= yPad;
+            mx.y += yPad;
+
+            if (!frustum.IntersectsAABB(mn, mx))
+            {
+                continue;
+            }
+        }
+
+        m_tessDrawList.push_back(static_cast<int>(i));
+
+        // HUD 용 어림값. HS 의 TessEdgeFactor 와 같은 식으로 패치 중심까지의 거리에서
+        // 대표 팩터 하나를 뽑고, (factor^2 * 2) 삼각형으로 셈한다 -- integer 파티션에서는
+        // 거의 정확하고 fractional 모드에서는 반 팩터 정도 어긋날 수 있는 근사치다.
+        const XMFLOAT3& mn = patch.bounds.min;
+        const XMFLOAT3& mx = patch.bounds.max;
+        const XMFLOAT3 center{ (mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f, (mn.z + mx.z) * 0.5f };
+        const float dx = center.x - origin.x;
+        const float dy = center.y - origin.y;
+        const float dz = center.z - origin.z;
+        const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+        float factor = m_tessMaxFactor * std::min(m_tessBaseDistance / std::max(dist, 0.0001f), 1.0f);
+        factor = std::clamp(factor, m_tessMinFactor, m_tessMaxFactor);
+
+        m_tessEstimatedTriangleCount += static_cast<size_t>(factor * factor * 2.0f);
+    }
+
+    m_tessDrawnPatchCount = m_tessDrawList.size();
+}
+
+void TerrainRenderer::DrawTessellatedPatches(ID3D11DeviceContext* context)
+{
+    context->IASetIndexBuffer(m_patchIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+    for (int patchIndex : m_tessDrawList)
+    {
+        // 패치 하나 = 컨트롤 포인트 4개. 인덱스 버퍼 안에서 패치 i 는 [i*4, i*4+4) 구간이다.
+        context->DrawIndexed(4, static_cast<UINT>(patchIndex) * 4u, 0);
+    }
+}
+
+void TerrainRenderer::UpdateTessConstantBuffer(ID3D11DeviceContext* context, const XMMATRIX& viewProj,
+                                               const XMFLOAT3& origin)
+{
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    if (FAILED(context->Map(m_tessConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+    {
+        return;
+    }
+
+    TessConstants* constants = static_cast<TessConstants*>(mapped.pData);
+
+    XMStoreFloat4x4(&constants->viewProj, XMMatrixTranspose(viewProj));
+
+    constants->factorParams = XMFLOAT4(m_tessBaseDistance, m_tessMaxFactor, m_tessMinFactor, 0.0f);
+
+    constants->heightParams = XMFLOAT4(
+        m_tessHeightScale,
+        m_tessHeightOffset,
+        m_tessDisplacementEnabled ? 1.0f : 0.0f,
+        m_tessNormalEpsilon);
+
+    constants->origin = XMFLOAT4(
+        origin.x, origin.y, origin.z,
+        m_tessFactorColorMode ? 1.0f : 0.0f);
+
+    context->Unmap(m_tessConstantBuffer.Get(), 0);
+}
+
+void TerrainRenderer::RenderTessellated(ID3D11DeviceContext* context, const XMMATRIX& world,
+                                        const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition)
+{
+    if (m_tessPatchGridDirty)
+    {
+        RebuildPatchIndexBuffer();
+    }
+
+    if (!m_tessPipelineReady || !m_patchIndexBuffer || m_patchGrid.IsEmpty())
+    {
+        return;   // 셰이더 컴파일 실패, 또는 아직 패치 넷이 없다 (첫 프레임 등)
+    }
+
+    UpdateTessPatchSelection(viewProj, cameraPosition);
+
+    if (m_tessDrawList.empty())
+    {
+        return;
+    }
+
+    const XMFLOAT3 origin = m_tessFrozen ? m_tessFrozenCameraPosition : cameraPosition;
+    UpdateTessConstantBuffer(context, viewProj, origin);
+
+    // ---------------- 파이프라인 설정 ----------------
+    UINT stride = sizeof(GridMesh::Vertex);
+    UINT offset = 0;
+
+    context->IASetInputLayout(m_inputLayout.Get());
+    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
+
+    ID3D11HullShader* hullShader = m_tessFractionalPartitioning
+        ? m_hullShaderFracOdd.Get()
+        : m_hullShaderInteger.Get();
+
+    context->VSSetShader(m_tessVertexShader.Get(), nullptr, 0);
+    context->HSSetShader(hullShader, nullptr, 0);
+    context->DSSetShader(m_domainShader.Get(), nullptr, 0);
+    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+    context->GSSetShader(nullptr, nullptr, 0);
+
+    context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+    context->HSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+    context->HSSetConstantBuffers(1, 1, m_tessConstantBuffer.GetAddressOf());
+    context->DSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+    context->DSSetConstantBuffers(1, 1, m_tessConstantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(1, 1, m_tessConstantBuffer.GetAddressOf());
+
+    context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+    context->OMSetDepthStencilState(m_depthState.Get(), 0);
+
+    // 높이맵 텍스처 : PS(t0/s0) 뿐 아니라 DS(t0/s0) 도 같은 텍스처를 다시 읽어
+    // displacement 를 한다. 스플래팅(t1/s1)은 7번에서 쓰지 않으므로 확실히 풀어준다.
+    {
+        ID3D11ShaderResourceView* srv = m_heightMapSRV.Get();
+        ID3D11SamplerState* sampler = m_heightMapSampler.Get();
+
+        context->PSSetShaderResources(0, 1, &srv);
+        context->PSSetSamplers(0, 1, &sampler);
+        context->DSSetShaderResources(0, 1, &srv);
+        context->DSSetSamplers(0, 1, &sampler);
+
+        ID3D11ShaderResourceView* nullSrv = nullptr;
+        ID3D11SamplerState* nullSampler = nullptr;
+        context->PSSetShaderResources(1, 1, &nullSrv);
+        context->PSSetSamplers(1, 1, &nullSampler);
+    }
+
+    // ---------------- 솔리드 패스 ----------------
+    if (m_displayMode != TerrainDisplayMode::Wireframe)
+    {
+        context->RSSetState(m_solidRasterizer.Get());
+        UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_solidColor, true);
+        DrawTessellatedPatches(context);
+    }
+
+    // ---------------- 와이어프레임 패스 ----------------
+    if (m_displayMode != TerrainDisplayMode::Solid)
+    {
+        context->RSSetState(m_wireRasterizer.Get());
+        UpdateConstantBuffer(context, world, viewProj, cameraPosition, m_wireColor, false);
+        DrawTessellatedPatches(context);
+    }
+
+    // ---------------- 패치 박스 ----------------
+    if (m_tessDebugBoxesEnabled)
+    {
+        // HS/DS 는 선분(LINELIST)과 같이 쓸 수 없다. RenderBoxLines 는 항상
+        // m_vertexShader/m_pixelShader, HS/DS = null 인 일반 삼각형 파이프라인을
+        // 가정하고 만들어졌으므로, 박스를 그리기 전에 먼저 그 상태로 되돌린다.
+        context->HSSetShader(nullptr, nullptr, 0);
+        context->DSSetShader(nullptr, nullptr, 0);
+        context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+
+        std::vector<std::pair<XMFLOAT3, XMFLOAT3>> boxes;
+        boxes.reserve(m_tessDrawList.size());
+
+        for (int patchIndex : m_tessDrawList)
+        {
+            const PatchGrid::Patch& patch = m_patchGrid.patches[patchIndex];
+            boxes.emplace_back(patch.bounds.min, patch.bounds.max);
+        }
+
+        RenderBoxLines(context, world, viewProj, cameraPosition, boxes, m_debugBoxColor);
+    }
+
+    // 다음에 그릴 것들을 위해 테셀레이션 스테이지를 확실히 꺼 둔다
+    // (일반 삼각형 경로의 Render() 도 매 프레임 HSSetShader(nullptr,...) 를 하지만,
+    //  이 함수에서 바로 return 하는 경우를 대비해 여기서도 확실히 해 둔다).
+    context->HSSetShader(nullptr, nullptr, 0);
+    context->DSSetShader(nullptr, nullptr, 0);
+}
+
 void TerrainRenderer::RenderDebugBoxes(ID3D11DeviceContext* context, const XMMATRIX& world,
                                        const XMMATRIX& viewProj, const XMFLOAT3& cameraPosition,
                                        const std::vector<int>& visibleLeaves)
@@ -1038,6 +1460,22 @@ void TerrainRenderer::Render()
 
     const XMMATRIX viewProj = camera->GetViewProjectionMatrix();
     const XMFLOAT3 cameraPosition = camera->GetWorldPosition();
+
+    // ---------------- 7번 하드웨어 테셀레이션 : 완전히 다른 경로 ----------------
+    // 패치는 삼각형 메시가 아니므로 아래의 쿼드트리/LOD 경로와 섞이지 않는다.
+    // (Technique07 은 SetQuadtreeLeafSize/SetLodChunkSize 를 호출하지 않으므로
+    //  평소에는 이 분기까지 오지 않아도 두 기능이 꺼진 채로 안전하게 지나간다.)
+    if (m_tessellationEnabled)
+    {
+        if (!m_tessPipelineReady && !m_tessPipelineFailed)
+        {
+            CreateTessellationPipelineResources();
+        }
+
+        RenderTessellated(context, world, viewProj, cameraPosition);
+        context->RSSetState(nullptr);
+        return;
+    }
 
     // ---------------- 쿼드트리 컬링 : 이번 프레임에 보이는 리프 목록 ----------------
     // 컬링 스위치(C)가 꺼져 있어도 통계/디버그 박스를 위해 목록 자체는 매 프레임 계산해둔다 --
