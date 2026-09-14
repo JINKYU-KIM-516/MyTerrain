@@ -10,6 +10,7 @@
 #include "App/Techniques/Technique06_DistanceLOD.h"
 #include "App/Techniques/Technique06b_AdvancedLOD.h"
 #include "App/Techniques/Technique07_Tessellation.h"
+#include "App/Techniques/Technique08_Sky.h"
 
 // ------------------------------------------------------------
 // Terrain Showcase System - 진입점
@@ -66,6 +67,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     app.RegisterTechnique(L"거리 기반 LOD 지형1", L"Distance LOD 1", &BuildDistanceLODScene, L"6-1");
     app.RegisterTechnique(L"고급 거리 LOD 지형2", L"Advanced Distance LOD 2", &BuildAdvancedLODScene, L"6-2");
     app.RegisterTechnique(L"하드웨어 테셀레이션 지형", L"Hardware Tessellation", &BuildTessellationScene, L"7");
+    app.RegisterTechnique(L"스카이맵", L"SkyDome", &BuildSkyScene, L"8");
     // ...
 
     // 메뉴 화면 구성

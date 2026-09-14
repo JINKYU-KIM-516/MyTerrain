@@ -169,6 +169,18 @@
     <ClCompile Include="src\App\Techniques\Technique07_Tessellation.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\SkyDome.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Terrain\SkyRenderer.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\SkyControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique08_Sky.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -310,10 +322,25 @@
     <ClInclude Include="src\App\Techniques\Technique07_Tessellation.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
+    <ClInclude Include="src\Terrain\SkyDome.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\SkyRenderer.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\SkyControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique08_Sky.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
   </ItemGroup>
 
   <ItemGroup>
     <None Include="shaders\BasicTerrain.hlsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\Sky.hlsl">
       <Filter>shaders</Filter>
     </None>
   </ItemGroup>

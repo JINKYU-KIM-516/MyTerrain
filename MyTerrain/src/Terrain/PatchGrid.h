@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "GridMesh.h"
 #include <DirectXMath.h>
 #include <vector>

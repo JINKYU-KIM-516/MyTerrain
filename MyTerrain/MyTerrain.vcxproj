@@ -145,6 +145,10 @@
     <ClCompile Include="src\Terrain\PatchGrid.cpp" />
     <ClCompile Include="src\Components\TessellationControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique07_Tessellation.cpp" />
+    <ClCompile Include="src\Terrain\SkyDome.cpp" />
+    <ClCompile Include="src\Terrain\SkyRenderer.cpp" />
+    <ClCompile Include="src\Components\SkyControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique08_Sky.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -194,12 +198,17 @@
     <ClInclude Include="src\Terrain\PatchGrid.h" />
     <ClInclude Include="src\Components\TessellationControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique07_Tessellation.h" />
+    <ClInclude Include="src\Terrain\SkyDome.h" />
+    <ClInclude Include="src\Terrain\SkyRenderer.h" />
+    <ClInclude Include="src\Components\SkyControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique08_Sky.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로
        빌드 시에는 컴파일하지 않고 솔루션 탐색기에만 표시한다 -->
   <ItemGroup>
     <None Include="shaders\BasicTerrain.hlsl" />
+    <None Include="shaders\Sky.hlsl" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

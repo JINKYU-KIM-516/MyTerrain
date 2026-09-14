@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../GameObject/Component.h"
 #include <string>
 
