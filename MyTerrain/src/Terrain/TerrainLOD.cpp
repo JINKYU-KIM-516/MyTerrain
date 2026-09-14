@@ -68,8 +68,10 @@ namespace TerrainLOD
         chunkCells = std::clamp(chunkCells, 1, std::max(mesh.divisionsX, mesh.divisionsZ));
         levelCount = std::clamp(levelCount, 1, kMaxLevels);
 
-        // 스텝이 청크보다 커지면 그 레벨은 의미가 없다(청크 전체가 사각형 하나 밑으로 줄지 않는다).
-        while (levelCount > 1 && (1 << (levelCount - 1)) > chunkCells)
+        // 스텝이 청크의 절반을 넘으면 청크가 1x1 스텝셀이 되어 "테두리 링 + 코어" 로
+        // 나눌 수도, 6-2 에서 경계 셀을 둘씩 묶을 수도 없다. 그래서 한 변이 최소
+        // 2 스텝셀은 남도록 레벨 수를 줄인다.
+        while (levelCount > 1 && (1 << (levelCount - 1)) > chunkCells / 2)
         {
             --levelCount;
         }
@@ -107,18 +109,39 @@ namespace TerrainLOD
 
                     chunk.indexStart[level] = static_cast<uint32_t>(grid.indices.size());
 
-                    for (int z = chunk.cellZ0; z < chunk.cellZ1; z += step)
+                    // 테두리 링을 먼저, 그 다음 코어를 잇는다 (두 번 도는 것이 이 순서를
+                    // 만드는 가장 단순한 방법이다). onRing 인 셀만 / 아닌 셀만 고른다.
+                    for (int pass = 0; pass < 2; ++pass)
                     {
-                        // 청크 바깥으로 넘어가지 않도록 마지막 사각형은 경계에서 잘라준다.
-                        // 덕분에 청크의 바깥 테두리 정점(x0, x1, z0, z1)은 어느 레벨에서도
-                        // 항상 쓰인다 -- 이음매는 "테두리 중간 정점이 빠져서" 생기는 것이지
-                        // 테두리 자체가 어긋나서 생기는 것이 아니다.
-                        const int zb = std::min(z + step, chunk.cellZ1);
+                        const bool wantRing = (pass == 0);
 
-                        for (int x = chunk.cellX0; x < chunk.cellX1; x += step)
+                        for (int z = chunk.cellZ0; z < chunk.cellZ1; z += step)
                         {
-                            const int xb = std::min(x + step, chunk.cellX1);
-                            PushQuad(grid.indices, vertexCountX, x, xb, z, zb);
+                            // 청크 바깥으로 넘어가지 않도록 마지막 사각형은 경계에서 잘라준다.
+                            // 덕분에 청크의 바깥 테두리 정점(x0, x1, z0, z1)은 어느 레벨에서도
+                            // 항상 쓰인다 -- 이음매는 "테두리 중간 정점이 빠져서" 생기는 것이지
+                            // 테두리 자체가 어긋나서 생기는 것이 아니다.
+                            const int zb = std::min(z + step, chunk.cellZ1);
+
+                            for (int x = chunk.cellX0; x < chunk.cellX1; x += step)
+                            {
+                                const int xb = std::min(x + step, chunk.cellX1);
+
+                                const bool onRing = (x == chunk.cellX0) || (xb >= chunk.cellX1) ||
+                                                    (z == chunk.cellZ0) || (zb >= chunk.cellZ1);
+                                if (onRing != wantRing)
+                                {
+                                    continue;
+                                }
+
+                                PushQuad(grid.indices, vertexCountX, x, xb, z, zb);
+                            }
+                        }
+
+                        if (wantRing)
+                        {
+                            chunk.ringCount[level] =
+                                static_cast<uint32_t>(grid.indices.size()) - chunk.indexStart[level];
                         }
                     }
 
@@ -131,6 +154,7 @@ namespace TerrainLOD
                 {
                     chunk.indexStart[level] = chunk.indexStart[levelCount - 1];
                     chunk.indexCount[level] = chunk.indexCount[levelCount - 1];
+                    chunk.ringCount[level] = chunk.ringCount[levelCount - 1];
                 }
 
                 grid.chunks.push_back(chunk);
@@ -170,6 +194,42 @@ namespace TerrainLOD
         }
 
         return level;
+    }
+
+    int NeighborCoarserMask(const Grid& grid, const std::vector<int>& levels, int chunkIndex)
+    {
+        if (grid.chunksX <= 0 || chunkIndex < 0 ||
+            static_cast<size_t>(chunkIndex) >= grid.chunks.size() ||
+            levels.size() != grid.chunks.size())
+        {
+            return 0;
+        }
+
+        const int cx = chunkIndex % grid.chunksX;
+        const int cz = chunkIndex / grid.chunksX;
+        const int self = levels[chunkIndex];
+
+        int mask = 0;
+
+        // 지형 바깥에는 이웃이 없으므로 스티칭할 것도 없다 (같은 레벨로 친다).
+        if (cx > 0 && levels[grid.ChunkIndexAt(cx - 1, cz)] > self)
+        {
+            mask |= TerrainStitch::EdgeMinusX;
+        }
+        if (cx + 1 < grid.chunksX && levels[grid.ChunkIndexAt(cx + 1, cz)] > self)
+        {
+            mask |= TerrainStitch::EdgePlusX;
+        }
+        if (cz > 0 && levels[grid.ChunkIndexAt(cx, cz - 1)] > self)
+        {
+            mask |= TerrainStitch::EdgeMinusZ;
+        }
+        if (cz + 1 < grid.chunksZ && levels[grid.ChunkIndexAt(cx, cz + 1)] > self)
+        {
+            mask |= TerrainStitch::EdgePlusZ;
+        }
+
+        return mask;
     }
 
     void ClampNeighborLevels(const Grid& grid, std::vector<int>& levels)

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "GridMesh.h"
+#include "TerrainStitch.h"
 #include <DirectXMath.h>
 #include <vector>
 #include <cstdint>
@@ -50,6 +51,12 @@ namespace TerrainLOD
 
     // 청크 하나 = 셀 범위 [cellX0, cellX1) x [cellZ0, cellZ1) 하나.
     // 레벨마다 인덱스 버퍼 안의 연속 구간을 하나씩 갖는다.
+    //
+    // 그 구간은 [테두리 링 | 코어] 순서로 굽는다. 6-2 스티칭에서 테두리만 매 프레임
+    // 새로 만들어 쓰려면 "코어만 그리기" 가 가능해야 하는데, 이렇게 이어 붙여 두면
+    // 저장은 그대로 한 벌이면서 두 가지 구간을 다 얻을 수 있다:
+    //   통짜   = [indexStart, indexStart + indexCount)
+    //   코어만 = [indexStart + ringCount, indexStart + indexCount)
     struct Chunk
     {
         AABB bounds;
@@ -61,6 +68,7 @@ namespace TerrainLOD
 
         uint32_t indexStart[kMaxLevels]{};
         uint32_t indexCount[kMaxLevels]{};
+        uint32_t ringCount[kMaxLevels]{};   // indexCount 중 앞쪽 테두리 링이 차지하는 몫
     };
 
     struct Grid
@@ -87,8 +95,10 @@ namespace TerrainLOD
     // 메시로부터 청크 격자와 레벨별 인덱스를 만든다.
     //   chunkCells : 청크 한 변의 셀 수 (2 이상. 2의 거듭제곱이 아니어도 동작하지만
     //                스텝이 딱 나눠떨어지지 않으면 마지막 사각형이 작아진다)
-    //   levelCount : 만들 레벨 수. 스텝(2^(levelCount-1))이 chunkCells 를 넘지 않도록
-    //                내부에서 자동으로 줄인다.
+    //   levelCount : 만들 레벨 수. 스텝(2^(levelCount-1))이 chunkCells 의 절반을 넘지
+    //                않도록 내부에서 자동으로 줄인다. 청크가 최소한 2x2 스텝셀은
+    //                되어야 "테두리 링과 코어" 로 나눌 수 있고, 6-2 스티칭도 경계 셀을
+    //                둘씩 묶어야 하므로 한 변이 최소 2 스텝셀이어야 하기 때문이다.
     //
     // 셀 (cx, cz) -> 정점 인덱스 변환식과 삼각형 순서가 GridMesh::Generate 와
     // 완전히 같아야 한다 (정점을 새로 만들지 않고 mesh.vertices 를 그대로 참조하므로).
@@ -107,4 +117,9 @@ namespace TerrainLOD
     // 틈의 크기를 줄여줄 뿐 없애지는 못한다 -- 제대로 된 해결은 6-2 의 스티칭이다.
     // levels 의 길이는 grid.chunks 와 같아야 한다.
     void ClampNeighborLevels(const Grid& grid, std::vector<int>& levels);
+
+    // 청크 chunkIndex 의 네 이웃 중 "한 단계 이상 거친" 방향을 TerrainStitch::EdgeBit
+    // 조합으로 돌려준다. 지형 바깥(이웃 없음)은 같은 레벨로 친다.
+    // 6-2 에서 이 마스크가 0 이 아닌 청크만 테두리를 다시 엮는다.
+    int NeighborCoarserMask(const Grid& grid, const std::vector<int>& levels, int chunkIndex);
 }

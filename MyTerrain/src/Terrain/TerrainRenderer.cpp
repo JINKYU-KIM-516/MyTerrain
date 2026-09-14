@@ -1,11 +1,13 @@
 ﻿#include "TerrainRenderer.h"
 #include "Frustum.h"
+#include "TerrainStitch.h"
 #include "../Framework/Framework.h"
 #include "../Framework/Camera.h"
 #include "../Framework/ShaderUtil.h"
 #include "../GameObject/GameObject.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 
 using namespace DirectX;
@@ -71,6 +73,13 @@ void TerrainRenderer::Destroy()
     m_quadtreeDirty = true;
 
     m_lodIndexBuffer.Reset();
+    m_lodStitchIndexBuffer.Reset();
+    m_lodStitchCapacity = 0;
+    m_lodStitchedChunkCount = 0;
+    m_stitchIndices.clear();
+    m_lodStitchStart.clear();
+    m_lodStitchCount.clear();
+    m_lodChunkMask.clear();
     m_lodGrid = TerrainLOD::Grid{};
     m_lodLevels.clear();
     m_lodDrawList.clear();
@@ -172,6 +181,13 @@ void TerrainRenderer::SetLodLevelCount(int count)
     m_lodDirty = true;
 }
 
+void TerrainRenderer::SetLodMorphWidth(float width)
+{
+    // 0.5 를 넘으면 morph 구간이 레벨 범위를 넘어서서, 세밀한 이웃과 붙어 있는
+    // 거친 청크까지 움직이기 시작한다 -- 경계에 실오라기 같은 틈이 생긴다.
+    m_lodMorphWidth = std::clamp(width, 0.0f, 0.5f);
+}
+
 void TerrainRenderer::SetLodBaseDistance(float distance)
 {
     // 거리는 매 프레임 선택에만 쓰이므로 인덱스를 다시 만들 필요가 없다 (즉시 반영된다).
@@ -239,6 +255,8 @@ bool TerrainRenderer::CreateDeviceResources()
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        // 6-2 지오머핑용 (부모 높이, 정점 레벨). morph 계수가 0 이면 셰이더가 쓰지 않는다.
+        { "TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT,    0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
     hr = device->CreateInputLayout(layout, ARRAYSIZE(layout),
@@ -437,6 +455,16 @@ bool TerrainRenderer::RebuildLodIndexBuffer()
 
     m_lodGrid = TerrainLOD::Build(m_cpuMesh, m_lodChunkCells, m_lodLevelCount);
 
+    // 청크 AABB 대각선의 최대값 (기준 거리 권장값을 HUD 에 보여주기 위해).
+    m_lodMaxChunkDiagonal = 0.0f;
+    for (const TerrainLOD::Chunk& chunk : m_lodGrid.chunks)
+    {
+        const float dx = chunk.bounds.max.x - chunk.bounds.min.x;
+        const float dy = chunk.bounds.max.y - chunk.bounds.min.y;
+        const float dz = chunk.bounds.max.z - chunk.bounds.min.z;
+        m_lodMaxChunkDiagonal = std::max(m_lodMaxChunkDiagonal, std::sqrt(dx * dx + dy * dy + dz * dz));
+    }
+
     if (m_lodGrid.indices.empty())
     {
         m_lodDirty = false;
@@ -487,7 +515,8 @@ void TerrainRenderer::UpdateLodSelection(const XMMATRIX& viewProj, const XMFLOAT
             m_lodLevels[i] = TerrainLOD::SelectLevel(distance, m_lodBaseDistance, m_lodGrid.levelCount);
         }
 
-        if (m_lodNeighborClampEnabled)
+        // 스티칭은 "이웃과의 레벨 차이가 1 이하" 를 전제로 하므로, 켜져 있으면 강제한다.
+        if (m_lodNeighborClampEnabled || m_lodStitchEnabled)
         {
             TerrainLOD::ClampNeighborLevels(m_lodGrid, m_lodLevels);
         }
@@ -505,11 +534,19 @@ void TerrainRenderer::UpdateLodSelection(const XMMATRIX& viewProj, const XMFLOAT
     m_lodDrawList.clear();
     m_lodDrawList.reserve(chunkCount);
 
+    m_lodChunkMask.assign(chunkCount, 0);
+    m_lodStitchStart.assign(chunkCount, 0);
+    m_lodStitchCount.assign(chunkCount, 0);
+    m_stitchIndices.clear();
+    m_lodStitchedChunkCount = 0;
+
     for (int& count : m_lodLevelHistogram)
     {
         count = 0;
     }
     m_lodDrawnTriangleCount = 0;
+
+    const int vertexCountX = m_cpuMesh.divisionsX + 1;
 
     for (size_t i = 0; i < chunkCount; ++i)
     {
@@ -525,10 +562,94 @@ void TerrainRenderer::UpdateLodSelection(const XMMATRIX& viewProj, const XMFLOAT
 
         m_lodDrawList.push_back(static_cast<int>(i));
         ++m_lodLevelHistogram[level];
-        m_lodDrawnTriangleCount += chunk.indexCount[level] / 3;
+
+        // ---- 3) 이웃보다 세밀한 청크만 테두리를 다시 엮는다 (6-2 스티칭) ----
+        const int mask = m_lodStitchEnabled
+            ? TerrainLOD::NeighborCoarserMask(m_lodGrid, m_lodLevels, static_cast<int>(i))
+            : 0;
+
+        if (mask == 0)
+        {
+            // 이웃이 전부 같은 레벨이면 미리 구운 통짜를 그대로 그린다.
+            m_lodDrawnTriangleCount += chunk.indexCount[level] / 3;
+            continue;
+        }
+
+        const UINT start = static_cast<UINT>(m_stitchIndices.size());
+
+        TerrainStitch::BuildRing(m_stitchIndices, vertexCountX,
+                                 chunk.cellX0, chunk.cellX1,
+                                 chunk.cellZ0, chunk.cellZ1,
+                                 1 << level, mask);
+
+        m_lodChunkMask[i] = mask;
+        m_lodStitchStart[i] = start;
+        m_lodStitchCount[i] = static_cast<UINT>(m_stitchIndices.size()) - start;
+        ++m_lodStitchedChunkCount;
+
+        // 이 청크는 "정적 버퍼의 코어" + "동적 버퍼의 새 테두리" 로 그려진다.
+        m_lodDrawnTriangleCount += (chunk.indexCount[level] - chunk.ringCount[level]) / 3;
+        m_lodDrawnTriangleCount += m_lodStitchCount[i] / 3;
     }
 
+    // 레벨이 같으면 상수 버퍼도 같으므로, 레벨 순으로 정렬해두면 프레임당 상수 버퍼
+    // 업로드가 레벨 수만큼으로 줄어든다 (청크 순서 그대로면 레벨이 계속 뒤바뀐다).
+    std::stable_sort(m_lodDrawList.begin(), m_lodDrawList.end(),
+                     [this](int a, int b) { return m_lodLevels[a] < m_lodLevels[b]; });
+
     m_lodDrawnChunkCount = m_lodDrawList.size();
+}
+
+bool TerrainRenderer::UploadLodStitchBuffer(ID3D11DeviceContext* context)
+{
+    if (m_stitchIndices.empty() || context == nullptr)
+    {
+        return true;   // 스티칭할 청크가 없으면 할 일도 없다
+    }
+
+    Framework* framework = Framework::GetInstance();
+    if (framework == nullptr)
+    {
+        return false;
+    }
+
+    ID3D11Device* device = framework->GetRenderer().GetDevice();
+    if (device == nullptr)
+    {
+        return false;
+    }
+
+    const UINT needed = static_cast<UINT>(m_stitchIndices.size());
+
+    // 매 프레임 크기가 조금씩 달라지므로 여유를 두고 잡았다가 부족할 때만 다시 만든다.
+    if (!m_lodStitchIndexBuffer || needed > m_lodStitchCapacity)
+    {
+        m_lodStitchCapacity = needed + needed / 2 + 1024;
+
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = static_cast<UINT>(sizeof(uint32_t) * m_lodStitchCapacity);
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        m_lodStitchIndexBuffer.Reset();
+        if (FAILED(device->CreateBuffer(&desc, nullptr, &m_lodStitchIndexBuffer)))
+        {
+            m_lodStitchCapacity = 0;
+            return false;
+        }
+    }
+
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    if (FAILED(context->Map(m_lodStitchIndexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+    {
+        return false;
+    }
+
+    std::memcpy(mapped.pData, m_stitchIndices.data(), sizeof(uint32_t) * m_stitchIndices.size());
+    context->Unmap(m_lodStitchIndexBuffer.Get(), 0);
+
+    return true;
 }
 
 void TerrainRenderer::DrawLodChunks(ID3D11DeviceContext* context, const XMMATRIX& world,
@@ -537,26 +658,84 @@ void TerrainRenderer::DrawLodChunks(ID3D11DeviceContext* context, const XMMATRIX
 {
     const bool levelColor = allowLevelColor && m_lodColorMode;
 
-    if (!levelColor)
+    // 지오머핑은 정점 단위로 계산되므로 청크마다 바뀌는 상수가 없다. 그래서
+    // 상수 버퍼를 다시 올릴 이유는 "레벨 색상" 하나뿐이고, m_lodDrawList 가
+    // 레벨 순으로 정렬돼 있으니 프레임당 업로드는 레벨 수만큼(최대 5회)이다.
+    int  uploadedLevel = -1;
+    bool uploaded = false;
+
+    auto applyLevelState = [&](int level)
     {
-        // 색이 하나면 상수 버퍼는 한 번만 올리고 Draw 만 반복한다.
-        UpdateConstantBuffer(context, world, viewProj, cameraPosition, baseColor, useLighting);
-    }
+        if (!levelColor)
+        {
+            if (uploaded)
+            {
+                return;
+            }
+
+            UpdateConstantBuffer(context, world, viewProj, cameraPosition,
+                                 baseColor, useLighting, m_lodMorphEnabled);
+            uploaded = true;
+            return;
+        }
+
+        if (uploaded && level == uploadedLevel)
+        {
+            return;
+        }
+
+        UpdateConstantBuffer(context, world, viewProj, cameraPosition,
+                             LodLevelColor(level), useLighting, m_lodMorphEnabled);
+
+        uploadedLevel = level;
+        uploaded = true;
+    };
+
+    // ---- 1) 정적 버퍼 : 이웃과 레벨이 같은 청크는 통짜로, 스티칭할 청크는 코어만 ----
+    context->IASetIndexBuffer(m_lodIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 
     for (int chunkIndex : m_lodDrawList)
     {
         const TerrainLOD::Chunk& chunk = m_lodGrid.chunks[chunkIndex];
         const int level = std::clamp(m_lodLevels[chunkIndex], 0, TerrainLOD::kMaxLevels - 1);
 
-        if (levelColor)
+        applyLevelState(level);
+
+        if (m_lodStitchCount[chunkIndex] == 0)
         {
-            // 청크마다 색이 다르므로 그때그때 상수 버퍼를 다시 올린다.
-            // (청크가 수백 개 수준이라 Map/DISCARD 비용은 문제되지 않는다)
-            UpdateConstantBuffer(context, world, viewProj, cameraPosition,
-                                 LodLevelColor(level), useLighting);
+            // 이웃과 레벨이 같다 -- 미리 구운 통짜 하나로 끝난다 (6-1 과 같은 경로).
+            context->DrawIndexed(chunk.indexCount[level], chunk.indexStart[level], 0);
+            continue;
         }
 
-        context->DrawIndexed(chunk.indexCount[level], chunk.indexStart[level], 0);
+        // 테두리는 아래 2) 에서 새로 엮은 것으로 그린다.
+        // (한 변이 2 스텝셀인 청크는 코어가 비어 있어 여기서 그릴 것이 없다)
+        const UINT coreCount = chunk.indexCount[level] - chunk.ringCount[level];
+        if (coreCount > 0)
+        {
+            context->DrawIndexed(coreCount, chunk.indexStart[level] + chunk.ringCount[level], 0);
+        }
+    }
+
+    // ---- 2) 동적 버퍼 : 이번 프레임에 새로 엮은 테두리 ----
+    if (m_lodStitchedChunkCount > 0 && m_lodStitchIndexBuffer)
+    {
+        context->IASetIndexBuffer(m_lodStitchIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+        for (int chunkIndex : m_lodDrawList)
+        {
+            const UINT count = m_lodStitchCount[chunkIndex];
+            if (count == 0)
+            {
+                continue;
+            }
+
+            applyLevelState(std::clamp(m_lodLevels[chunkIndex], 0, TerrainLOD::kMaxLevels - 1));
+            context->DrawIndexed(count, m_lodStitchStart[chunkIndex], 0);
+        }
+
+        // 다음 패스(와이어프레임 / 디버그 박스)를 위해 원래 버퍼로 돌려놓는다.
+        context->IASetIndexBuffer(m_lodIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     }
 }
 
@@ -565,7 +744,8 @@ void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
                                            const XMMATRIX& viewProj,
                                            const XMFLOAT3& cameraPosition,
                                            const XMFLOAT4& baseColor,
-                                           bool useLighting)
+                                           bool useLighting,
+                                           bool morphEnabled)
 {
     D3D11_MAPPED_SUBRESOURCE mapped = {};
     if (FAILED(context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
@@ -607,6 +787,23 @@ void TerrainRenderer::UpdateConstantBuffer(ID3D11DeviceContext* context,
         m_splatSlopeStart,
         m_splatSlopeEnd,
         splatOn ? 1.0f : 0.0f);
+
+    // 6-2 지오머핑. morphEnabled 가 false 면 w = 0 이 되어 정점 셰이더의 lerp 계수가
+    // 항상 0 이다 -- 1~6-1번 기법과 디버그 박스 패스가 영향을 받지 않는 이유다.
+    //
+    // 청크마다 달라지는 값이 하나도 없다는 점이 중요하다. morph 계수를 정점 단위로
+    // 계산하기 때문에, 지오머핑 때문에 상수 버퍼를 다시 올릴 일이 없다.
+    constants->lodParams = XMFLOAT4(
+        static_cast<float>(std::max(m_lodGrid.levelCount - 1, 0)),
+        m_lodBaseDistance,
+        m_lodMorphWidth,
+        morphEnabled ? 1.0f : 0.0f);
+
+    const XMFLOAT3 lodOrigin = m_lodFrozen ? m_lodFrozenCameraPosition : cameraPosition;
+
+    constants->lodOrigin = XMFLOAT4(
+        lodOrigin.x, lodOrigin.y, lodOrigin.z,
+        (m_lodMorphColorMode && morphEnabled && useLighting) ? 1.0f : 0.0f);
 
     context->Unmap(m_constantBuffer.Get(), 0);
 }
@@ -868,6 +1065,7 @@ void TerrainRenderer::Render()
     if (lodAvailable)
     {
         UpdateLodSelection(viewProj, cameraPosition);
+        UploadLodStitchBuffer(context);
     }
     else
     {

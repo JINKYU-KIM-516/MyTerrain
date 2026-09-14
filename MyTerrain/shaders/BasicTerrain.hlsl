@@ -38,6 +38,18 @@ cbuffer CBTerrain : register(b0)
     //   z = 경사 임계값 끝
     //   w = 스플래팅 모드 (0 = 끔 -> 1~3번 기법과 완전히 동일하게 동작)
     float4   gSplatParams;
+
+    // 6-2 지오머핑에서만 쓴다.
+    //   x = morph 하지 않는 정점 레벨의 하한 (= 실제 최고 LOD 레벨).
+    //       이 레벨 이상인 정점은 어차피 사라지지 않으므로 움직이지 않는다.
+    //   y = 기준 거리 (레벨 0 이 유지되는 거리)
+    //   z = morph 구간 폭 (레벨 경계 거리의 몇 %부터 morph 를 시작할지, 0~0.5)
+    //   w = 지오머핑 켬/끔 (0 = 끔 -> 1~6-1번 기법과 완전히 동일하게 동작)
+    float4   gLodParams;
+
+    // xyz = LOD 기준 위치 (프리즈 중이면 얼려둔 카메라 위치)
+    // w   = morph 계수 시각화 모드 (0 = 끔)
+    float4   gLodOrigin;
 };
 
 // 높이맵 텍스처. 3·4번 기법에서 바인딩된다(모드가 둘 다 0이면 읽지 않는다).
@@ -51,9 +63,13 @@ SamplerState   gSplatSampler  : register(s1);
 
 struct VSInput
 {
-    float3 position : POSITION;
-    float3 normal   : NORMAL;
-    float2 uv       : TEXCOORD0;
+    float3 position      : POSITION;
+    float3 normal        : NORMAL;
+    float2 uv            : TEXCOORD0;
+
+    // 6-2 지오머핑용. x = 이 정점이 사라질 때의 목표 높이, y = 정점 레벨.
+    // GridMesh::Generate 가 구워 넣는다.
+    float2 morphData : TEXCOORD1;
 };
 
 struct PSInput
@@ -62,7 +78,43 @@ struct PSInput
     float3 worldPos : TEXCOORD0;
     float3 normal   : NORMAL;
     float2 uv       : TEXCOORD1;
+    float  morph    : TEXCOORD2;   // 6-2 시각화용
 };
+
+//---------------------------------------------------------------
+// 6-2 지오머핑
+//---------------------------------------------------------------
+// morph 계수를 "정점 자신의 레벨과 거리" 로만 계산하는 것이 이 기법의 핵심이다.
+//
+// 청크마다 하나의 계수를 쓰면, 같은 정점을 공유하는 두 청크가 (레벨이 다르거나
+// 청크 중심까지의 거리가 달라서) 서로 다른 값을 얻고, 그 정점의 높이가 어긋나
+// 이음매를 없애려다 새 이음매를 만든다. 정점 정보만으로 계산하면 어느 청크가
+// 그리든 같은 값이 나오므로 경계가 항상 맞는다.
+//
+// 정점은 "정점 레벨 -> 정점 레벨 + 1" 전환에서 딱 한 번 사라진다. 그래서 그 전환
+// 거리(기준 거리 * 2^정점레벨)에 닿는 순간 계수가 1 이 되도록 맞춰두면, 청크가
+// 레벨을 올리는 바로 그 순간 사라질 정점들이 이미 거친 표면 위에 올라가 있다
+// -- 그래서 전환이 눈에 띄지 않는다.
+float ComputeMorph(float3 worldPos, float vertexLevel)
+{
+    if (gLodParams.w < 0.5f)
+    {
+        return 0.0f;
+    }
+
+    // 최고 레벨까지 살아남는 정점은 사라질 일이 없으니 움직이지 않는다.
+    if (vertexLevel >= gLodParams.x)
+    {
+        return 0.0f;
+    }
+
+    float distanceToOrigin = distance(worldPos, gLodOrigin.xyz);
+
+    float threshold  = gLodParams.y * exp2(vertexLevel);   // 이 정점이 사라지는 거리
+    float morphStart = threshold * (1.0f - gLodParams.z);
+
+    return saturate((distanceToOrigin - morphStart) / max(threshold - morphStart, 0.0001f));
+}
 
 //---------------------------------------------------------------
 // Vertex Shader
@@ -71,12 +123,23 @@ PSInput VSMain(VSInput input)
 {
     PSInput output;
 
-    output.position = mul(float4(input.position, 1.0f), gWorldViewProj);
-    output.worldPos = mul(float4(input.position, 1.0f), gWorld).xyz;
+    // morph 계수는 "움직이기 전" 위치로 계산해야 한다. 그래야 이 정점을 공유하는
+    // 두 청크가 같은 값을 얻는다.
+    float3 basePos = mul(float4(input.position, 1.0f), gWorld).xyz;
+    float  morph = ComputeMorph(basePos, input.morphData.y);
 
-    // 균등 스케일만 사용하므로 월드 행렬의 3x3 부분을 그대로 써도 된다
+    float3 localPos = input.position;
+    localPos.y = lerp(localPos.y, input.morphData.x, morph);
+
+    output.position = mul(float4(localPos, 1.0f), gWorldViewProj);
+    output.worldPos = mul(float4(localPos, 1.0f), gWorld).xyz;
+
+    // 균등 스케일만 사용하므로 월드 행렬의 3x3 부분을 그대로 써도 된다.
+    // 법선은 morph 하지 않는다 -- 부모 법선까지 정점에 넣으면 12바이트가 더 늘고,
+    // 실루엣이 튀는 기하 팝핑과 달리 명암 변화는 거의 눈에 띄지 않기 때문이다.
     output.normal = normalize(mul(input.normal, (float3x3)gWorld));
     output.uv = input.uv;
+    output.morph = morph;
 
     return output;
 }
@@ -200,6 +263,12 @@ float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET
         float  checker = frac((cell.x + cell.y) * 0.5f) * 2.0f;   // 0 또는 1
 
         albedo = lerp(gBaseColor.rgb, gBaseColor.rgb * 0.72f, checker);
+    }
+
+    // ---- 6-2 morph 계수 시각화 : 0 = 파랑(아직 안 움직임), 1 = 빨강(다음 레벨과 같아짐) ----
+    if (gLodOrigin.w > 0.5f)
+    {
+        albedo = lerp(float3(0.24f, 0.46f, 0.94f), float3(0.94f, 0.31f, 0.22f), saturate(input.morph));
     }
 
     // 앰비언트 + 디퓨즈

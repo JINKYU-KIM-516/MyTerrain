@@ -151,6 +151,15 @@
     <ClCompile Include="src\App\Techniques\Technique06_DistanceLOD.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\TerrainStitch.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\GeoLodControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique06b_AdvancedLOD.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -272,6 +281,15 @@
       <Filter>Components</Filter>
     </ClInclude>
     <ClInclude Include="src\App\Techniques\Technique06_DistanceLOD.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Terrain\TerrainStitch.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\GeoLodControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique06b_AdvancedLOD.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
   </ItemGroup>

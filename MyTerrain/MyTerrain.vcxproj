@@ -139,6 +139,9 @@
     <ClCompile Include="src\Terrain\TerrainLOD.cpp" />
     <ClCompile Include="src\Components\LodControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique06_DistanceLOD.cpp" />
+    <ClCompile Include="src\Terrain\TerrainStitch.cpp" />
+    <ClCompile Include="src\Components\GeoLodControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique06b_AdvancedLOD.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -182,6 +185,9 @@
     <ClInclude Include="src\Terrain\TerrainLOD.h" />
     <ClInclude Include="src\Components\LodControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique06_DistanceLOD.h" />
+    <ClInclude Include="src\Terrain\TerrainStitch.h" />
+    <ClInclude Include="src\Components\GeoLodControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique06b_AdvancedLOD.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로

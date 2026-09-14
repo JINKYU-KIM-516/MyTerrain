@@ -6,6 +6,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -168,7 +169,46 @@ public:
     void SetLodFrozen(bool frozen) { m_lodFrozen = frozen; m_lodFreezeRequested = frozen; }
     bool IsLodFrozen() const { return m_lodFrozen; }
 
+    // ---------------- 6-2 : 스티칭 & 지오머핑 ----------------
+    // 켜면 이웃보다 세밀한 청크의 테두리를 매 프레임 다시 엮어 T-junction 을 없앤다.
+    // (거친 쪽은 손대지 않는다. 켜면 이웃 레벨 차이 제한이 자동으로 강제된다)
+    void SetLodStitchEnabled(bool enabled) { m_lodStitchEnabled = enabled; }
+    bool IsLodStitchEnabled() const { return m_lodStitchEnabled; }
+
+    // 켜면 레벨 경계에 가까워질수록 정점 높이를 한 단계 거친 레벨 쪽으로 끌어당긴다.
+    // 끄면(기본) 정점 셰이더의 lerp 계수가 0 이 되어 6-1 과 완전히 같은 결과가 나온다.
+    void SetLodMorphEnabled(bool enabled) { m_lodMorphEnabled = enabled; }
+    bool IsLodMorphEnabled() const { return m_lodMorphEnabled; }
+
+    // morph 를 시작하는 지점 (레벨 경계 거리의 몇 % 앞에서부터인지, 0 ~ 0.5).
+    // 0.5 를 넘으면 morph 구간이 레벨 범위를 넘어서고, 거친 쪽 청크가 세밀한 이웃과
+    // 붙어 있는 동안에도 움직이기 시작해서 경계에 실오라기 같은 틈이 생길 수 있다.
+    void SetLodMorphWidth(float width);
+    float GetLodMorphWidth() const { return m_lodMorphWidth; }
+
+    // 켜면 morph 계수를 색으로 칠한다 (파랑 = 0, 빨강 = 1).
+    void SetLodMorphColorMode(bool enabled) { m_lodMorphColorMode = enabled; }
+    bool IsLodMorphColorMode() const { return m_lodMorphColorMode; }
+
+    // 청크 AABB 대각선의 최대값. 지오머핑이 팝핑을 제대로 흡수하려면 기준 거리가
+    // 이 값보다 넉넉히 커야 한다 (아래 GetLodRecommendedBaseDistance 참고).
+    float GetLodMaxChunkDiagonal() const { return m_lodMaxChunkDiagonal; }
+
+    // 지금 설정에서 권장하는 최소 기준 거리.
+    //
+    // 레벨 전환은 청크의 "가장 가까운 점" 기준으로 일어나는데, 같은 청크 안에서도
+    // 정점마다 거리가 최대 대각선만큼 차이난다. 기준 거리가 그 차이에 비해 작으면
+    // 한 청크 안에서 어떤 정점은 이미 morph 를 끝냈고 어떤 정점은 아직 시작도 안 한
+    // 상태로 레벨이 바뀌어 버려서, 지오머핑이 팝핑을 다 흡수하지 못한다.
+    // (근본 해결은 레벨이 오를수록 청크도 커지는 쿼드트리 구조 -- 10번 무한 지형의 몫이다)
+    float GetLodRecommendedBaseDistance() const
+    {
+        return m_lodMaxChunkDiagonal / std::max(1.0f - 2.0f * m_lodMorphWidth, 0.05f);
+    }
+
     // ---- 지난 프레임 기준 통계 (HUD 표시용) ----
+    size_t GetLodStitchedChunkCount() const { return m_lodStitchedChunkCount; }
+    size_t GetLodStitchIndexCount() const { return m_stitchIndices.size(); }
     size_t GetLodChunkCount() const { return m_lodGrid.chunks.size(); }
     size_t GetLodDrawnChunkCount() const { return m_lodDrawnChunkCount; }
     size_t GetLodDrawnTriangleCount() const { return m_lodDrawnTriangleCount; }
@@ -195,6 +235,10 @@ private:
 
     // 이번 프레임에 그릴 청크와 각 청크의 레벨을 정한다 (m_lodLevels / m_lodDrawList 갱신).
     void UpdateLodSelection(const DirectX::XMMATRIX& viewProj, const DirectX::XMFLOAT3& cameraPosition);
+
+    // 스티칭이 필요한 청크들의 테두리를 CPU 에서 만들어 동적 인덱스 버퍼에 올린다.
+    // (UpdateLodSelection 이 채워둔 m_lodChunkMask 를 보고 결정한다)
+    bool UploadLodStitchBuffer(ID3D11DeviceContext* context);
 
     // m_lodDrawList 를 청크마다 DrawIndexed 로 그린다.
     //   allowLevelColor : 레벨 색상 모드를 허용할지 (와이어프레임 패스는 단색이어야 하므로 false)
@@ -228,10 +272,11 @@ private:
                               const DirectX::XMMATRIX& viewProj,
                               const DirectX::XMFLOAT3& cameraPosition,
                               const DirectX::XMFLOAT4& baseColor,
-                              bool useLighting);
+                              bool useLighting,
+                              bool morphEnabled = false);
 
 private:
-    // BasicTerrain.hlsl 의 cbuffer CBTerrain 과 메모리 배치가 같아야 한다 (192바이트)
+    // BasicTerrain.hlsl 의 cbuffer CBTerrain 과 메모리 배치가 같아야 한다 (224바이트)
     struct TerrainConstants
     {
         DirectX::XMFLOAT4X4 world;
@@ -254,6 +299,17 @@ private:
         //   z = 경사 임계값 끝
         //   w = 스플래팅 모드 (0 = 끔 -> 1~3번 기법과 완전히 동일하게 동작)
         DirectX::XMFLOAT4   splatParams;
+
+        // 6-2 지오머핑에서만 쓴다.
+        //   x = 실제 최고 LOD 레벨 (이 레벨 이상인 정점은 사라지지 않으므로 움직이지 않는다)
+        //   y = 기준 거리
+        //   z = morph 구간 폭 (0 ~ 0.5)
+        //   w = 지오머핑 켬/끔 (0 = 끔 -> 1~6-1번 기법과 완전히 동일하게 동작)
+        DirectX::XMFLOAT4   lodParams;
+
+        // xyz = LOD 기준 위치 (프리즈 중이면 얼려둔 카메라 위치)
+        // w   = morph 계수 시각화 모드
+        DirectX::XMFLOAT4   lodOrigin;
     };
 
     // ---- 그리드 파라미터 ----
@@ -322,7 +378,26 @@ private:
     ComPtr<ID3D11Buffer> m_lodIndexBuffer;
 
     std::vector<int> m_lodLevels;      // 청크마다 이번 프레임에 쓸 레벨
-    std::vector<int> m_lodDrawList;    // 이번 프레임에 실제로 그릴 청크 인덱스
+    std::vector<int> m_lodDrawList;    // 이번 프레임에 실제로 그릴 청크 인덱스 (레벨 순으로 정렬)
+
+    // ---- 6-2 스티칭 & 지오머핑 ----
+    bool  m_lodStitchEnabled = false;
+    bool  m_lodMorphEnabled = false;
+    bool  m_lodMorphColorMode = false;
+    float m_lodMorphWidth = 0.25f;
+    float m_lodMaxChunkDiagonal = 0.0f;   // 청크 격자를 다시 만들 때 함께 계산한다
+
+    // 청크마다 "이웃이 한 단계 거친 방향" 비트 (TerrainStitch::EdgeBit). 0 이면 통짜로 그린다.
+    std::vector<int> m_lodChunkMask;
+
+    // 마스크가 0 이 아닌 청크의 테두리를 매 프레임 여기에 만들어 동적 버퍼로 올린다.
+    // 레벨 영역은 넓고 경계는 얇아서 실제로 만드는 양은 전체의 10~20% 수준이다.
+    std::vector<uint32_t> m_stitchIndices;
+    std::vector<UINT>     m_lodStitchStart;   // 청크별 시작 (m_stitchIndices 안에서의 위치)
+    std::vector<UINT>     m_lodStitchCount;   // 청크별 인덱스 수 (0 이면 스티칭 안 함)
+    ComPtr<ID3D11Buffer>  m_lodStitchIndexBuffer;
+    UINT   m_lodStitchCapacity = 0;
+    size_t m_lodStitchedChunkCount = 0;
 
     size_t m_lodDrawnChunkCount = 0;
     size_t m_lodDrawnTriangleCount = 0;
