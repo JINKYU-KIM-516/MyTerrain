@@ -149,6 +149,9 @@
     <ClCompile Include="src\Terrain\SkyRenderer.cpp" />
     <ClCompile Include="src\Components\SkyControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique08_Sky.cpp" />
+    <ClCompile Include="src\Terrain\CloudRenderer.cpp" />
+    <ClCompile Include="src\Components\CloudControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique09_Clouds.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -202,6 +205,9 @@
     <ClInclude Include="src\Terrain\SkyRenderer.h" />
     <ClInclude Include="src\Components\SkyControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique08_Sky.h" />
+    <ClInclude Include="src\Terrain\CloudRenderer.h" />
+    <ClInclude Include="src\Components\CloudControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique09_Clouds.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로
@@ -209,6 +215,7 @@
   <ItemGroup>
     <None Include="shaders\BasicTerrain.hlsl" />
     <None Include="shaders\Sky.hlsl" />
+    <None Include="shaders\Cloud.hlsl" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

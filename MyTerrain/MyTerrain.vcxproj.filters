@@ -181,6 +181,15 @@
     <ClCompile Include="src\App\Techniques\Technique08_Sky.cpp">
       <Filter>App\Techniques</Filter>
     </ClCompile>
+    <ClCompile Include="src\Terrain\CloudRenderer.cpp">
+      <Filter>Terrain</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Components\CloudControlComponent.cpp">
+      <Filter>Components</Filter>
+    </ClCompile>
+    <ClCompile Include="src\App\Techniques\Technique09_Clouds.cpp">
+      <Filter>App\Techniques</Filter>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -334,6 +343,15 @@
     <ClInclude Include="src\App\Techniques\Technique08_Sky.h">
       <Filter>App\Techniques</Filter>
     </ClInclude>
+    <ClInclude Include="src\Terrain\CloudRenderer.h">
+      <Filter>Terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Components\CloudControlComponent.h">
+      <Filter>Components</Filter>
+    </ClInclude>
+    <ClInclude Include="src\App\Techniques\Technique09_Clouds.h">
+      <Filter>App\Techniques</Filter>
+    </ClInclude>
   </ItemGroup>
 
   <ItemGroup>
@@ -341,6 +359,9 @@
       <Filter>shaders</Filter>
     </None>
     <None Include="shaders\Sky.hlsl">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\Cloud.hlsl">
       <Filter>shaders</Filter>
     </None>
   </ItemGroup>
