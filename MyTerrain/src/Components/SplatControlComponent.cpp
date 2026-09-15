@@ -1,5 +1,4 @@
 ﻿#include "SplatControlComponent.h"
-#include "../Framework/InputManager.h"
 #include "../Terrain/TerrainRenderer.h"
 #include "../UI/UIText.h"
 
@@ -85,62 +84,71 @@ void SplatControlComponent::Update(float deltaTime)
         ApplySplatParams();
     }
 
-    InputManager& input = InputManager::GetInstance();
-    bool changed = false;
-
-    if (input.IsKeyPressed('V'))
-    {
-        m_splatMode = !m_splatMode;
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('I'))
-    {
-        m_tiling = std::clamp(m_tiling * 1.15f, 0.002f, 2.0f);
-        changed = true;
-    }
-    if (input.IsKeyPressed('K'))
-    {
-        m_tiling = std::clamp(m_tiling / 1.15f, 0.002f, 2.0f);
-        changed = true;
-    }
-
-    // 경사 구간을 위(U)/아래(J)로 넓힌다 -- 시작점은 내려가고 끝점은 올라간다.
-    // 최소 0.05 간격은 항상 유지한다 (구간이 0으로 접히면 smoothstep 이 계단이 된다).
-    if (input.IsKeyPressed('U'))
-    {
-        m_slopeStart = std::clamp(m_slopeStart - 0.05f, 0.0f, m_slopeEnd - 0.05f);
-        m_slopeEnd = std::clamp(m_slopeEnd + 0.05f, m_slopeStart + 0.05f, 1.0f);
-        changed = true;
-    }
-    if (input.IsKeyPressed('J'))
-    {
-        const float mid = (m_slopeStart + m_slopeEnd) * 0.5f;
-        m_slopeStart = std::clamp(mid - 0.025f, 0.0f, mid);
-        m_slopeEnd = std::clamp(mid + 0.025f, mid, 1.0f);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_tiling = kDefaultTiling;
-        m_slopeStart = kDefaultSlopeStart;
-        m_slopeEnd = kDefaultSlopeEnd;
-        m_splatMode = true;
-        changed = true;
-    }
-
-    if (changed)
-    {
-        ApplySplatParams();
-    }
+    // 조작(켬/끔, 타일링, 경사 구간, 기본값)은 전부 화면 버튼으로 옮겨졌다.
+    // 여기서는 텍스처가 늦게 준비될 때를 위한 재시도만 남아 있다.
 
     m_refreshTimer += deltaTime;
-    if (changed || m_refreshTimer >= kRefreshInterval)
+    if (m_refreshTimer >= kRefreshInterval)
     {
         m_refreshTimer = 0.0f;
         RefreshInfoText();
     }
+}
+
+// ---- 버튼용 동작 (예전 V 키) ----
+void SplatControlComponent::ToggleSplatMode()
+{
+    m_splatMode = !m_splatMode;
+    ApplySplatParams();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 I 키) ----
+void SplatControlComponent::IncreaseTiling()
+{
+    m_tiling = std::clamp(m_tiling * 1.15f, 0.002f, 2.0f);
+    ApplySplatParams();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 K 키) ----
+void SplatControlComponent::DecreaseTiling()
+{
+    m_tiling = std::clamp(m_tiling / 1.15f, 0.002f, 2.0f);
+    ApplySplatParams();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 U 키) ----
+// 경사 구간을 넓힌다 -- 시작점은 내려가고 끝점은 올라간다.
+// 최소 0.05 간격은 항상 유지한다 (구간이 0으로 접히면 smoothstep 이 계단이 된다).
+void SplatControlComponent::WidenSlopeRange()
+{
+    m_slopeStart = std::clamp(m_slopeStart - 0.05f, 0.0f, m_slopeEnd - 0.05f);
+    m_slopeEnd = std::clamp(m_slopeEnd + 0.05f, m_slopeStart + 0.05f, 1.0f);
+    ApplySplatParams();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 J 키) ----
+void SplatControlComponent::NarrowSlopeRange()
+{
+    const float mid = (m_slopeStart + m_slopeEnd) * 0.5f;
+    m_slopeStart = std::clamp(mid - 0.025f, 0.0f, mid);
+    m_slopeEnd = std::clamp(mid + 0.025f, mid, 1.0f);
+    ApplySplatParams();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void SplatControlComponent::ResetToDefault()
+{
+    m_tiling = kDefaultTiling;
+    m_slopeStart = kDefaultSlopeStart;
+    m_slopeEnd = kDefaultSlopeEnd;
+    m_splatMode = true;
+    ApplySplatParams();
+    RefreshInfoText();
 }
 
 void SplatControlComponent::RefreshInfoText()
@@ -150,7 +158,7 @@ void SplatControlComponent::RefreshInfoText()
         return;
     }
 
-    std::wstring text = L"[스플래팅]  켬/끔 V   타일링 I/K   경사 구간 넓히기/좁히기 U/J   기본값 0\n";
+    std::wstring text = L"[스플래팅]\n";
 
     if (!m_loadError.empty())
     {

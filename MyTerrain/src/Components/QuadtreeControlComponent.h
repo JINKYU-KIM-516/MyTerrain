@@ -12,11 +12,9 @@ class UIText;
 // "쿼드트리로 절두체 밖 리프를 건너뛰는" 부분만 별도로 얹는다 -- SplatControlComponent 와
 // 같은 이유로 GridControlComponent 를 상속하지 않고 독립 컴포넌트로 둔다.
 //
-//   C        컬링 켬/끔 (끄면 지금까지처럼 지형 전체를 한 번의 Draw 호출로 그린다)
-//   B        디버그 박스(보이는 리프의 AABB) 표시 켬/끔
-//   , / .    리프 크기 줄이기 / 늘리기 (줄일수록 리프가 잘게 쪼개져 컬링이 세밀해지지만
-//            Draw 호출 수가 늘어난다 -- 트레이드오프를 HUD 로 바로 보여준다)
-//   0(넘패드 포함)  기본값으로 복귀
+// 컬링 켬/끔, 디버그 박스 표시, 리프 크기 조절(줄일수록 리프가 잘게 쪼개져 컬링이
+// 세밀해지지만 Draw 호출 수가 늘어난다 -- 트레이드오프를 HUD 로 바로 보여준다),
+// 기본값 복귀는 전부 화면 버튼으로 조작한다.
 class QuadtreeControlComponent : public Component
 {
 public:
@@ -25,6 +23,13 @@ public:
 
     void SetTarget(TerrainRenderer* terrain) { m_terrain = terrain; }
     void SetInfoText(UIText* infoText) { m_infoText = infoText; }
+
+    // ---- 버튼용 동작 (예전에는 각각 C / B / , / . / 0 키였다) ----
+    void ToggleCulling();
+    void ToggleDebugBoxes();
+    void DecreaseLeafSize();
+    void IncreaseLeafSize();
+    void ResetToDefault();
 
 private:
     void ApplyLeafSize();

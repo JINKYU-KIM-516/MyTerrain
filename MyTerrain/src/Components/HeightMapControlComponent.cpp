@@ -236,6 +236,49 @@ void HeightMapControlComponent::ApplyParamChange()
     }
 }
 
+// ---- 버튼용 동작 (예전 N 키) ----
+void HeightMapControlComponent::NextFile()
+{
+    CycleFile(1);
+    m_selected = ParamId::File;
+
+    ApplyParamChange();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 C 키) ----
+void HeightMapControlComponent::ToggleHeightColorMode()
+{
+    if (m_terrain != nullptr)
+    {
+        m_terrain->SetHeightColorMode(!m_terrain->IsHeightColorMode());
+    }
+
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 F5 키) ----
+// 폴더를 다시 훑고 현재 파일을 다시 읽는다.
+// 이미지를 고쳐 저장한 뒤 프로그램을 다시 켜지 않고 확인하기 위한 것이다.
+void HeightMapControlComponent::ReloadFiles()
+{
+    RescanFiles();
+    LoadFileAt((m_fileIndex < 0) ? 0 : m_fileIndex);
+
+    ApplyParamChange();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void HeightMapControlComponent::ResetToDefault()
+{
+    // 파일 선택은 그대로 두고 펼침 파라미터만 되돌린다
+    m_params = m_defaultParams;
+
+    ApplyParamChange();
+    RefreshInfoText();
+}
+
 void HeightMapControlComponent::Update(float deltaTime)
 {
     // 분할 수(+/-), 셀 크기([ / ]), 표시 모드(Tab) 는 부모가 처리한다
@@ -284,35 +327,8 @@ void HeightMapControlComponent::Update(float deltaTime)
         paramChanged = true;
     }
 
-    // ---------------- 단축키 ----------------
-    if (input.IsKeyPressed('N'))
-    {
-        CycleFile(1);
-        m_selected = ParamId::File;
-        paramChanged = true;
-    }
-
-    if (input.IsKeyPressed('C'))
-    {
-        m_terrain->SetHeightColorMode(!m_terrain->IsHeightColorMode());
-        refreshHud = true;
-    }
-
-    // F5 : 폴더를 다시 훑고 현재 파일을 다시 읽는다.
-    // 이미지를 고쳐 저장한 뒤 프로그램을 다시 켜지 않고 확인하기 위한 것이다.
-    if (input.IsKeyPressed(VK_F5))
-    {
-        RescanFiles();
-        LoadFileAt((m_fileIndex < 0) ? 0 : m_fileIndex);
-        paramChanged = true;
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        // 파일 선택은 그대로 두고 펼침 파라미터만 되돌린다
-        m_params = m_defaultParams;
-        paramChanged = true;
-    }
+    // 다음 파일 / 고도 색상 / 다시 읽기 / 기본값 복귀는 화면 버튼(NextFile /
+    // ToggleHeightColorMode / ReloadFiles / ResetToDefault)으로 옮겨졌다.
 
     if (paramChanged)
     {
@@ -448,7 +464,7 @@ void HeightMapControlComponent::RefreshInfoText()
 
     text += L"\n표시 모드 : ";
     text += ToDisplayName(m_terrain->GetDisplayMode());
-    text += L"   고도 색상(C) : ";
+    text += L"   고도 색상 : ";
     text += m_terrain->IsHeightColorMode() ? L"켬" : L"끔";
     text += L"   FPS : " + FormatFixed(fps, 1);
 

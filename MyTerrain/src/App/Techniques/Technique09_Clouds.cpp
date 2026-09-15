@@ -12,6 +12,7 @@
 #include "../../Terrain/CloudRenderer.h"
 #include "../../Terrain/HeightMap.h"
 #include "../../UI/UIText.h"
+#include "../../UI/UIButton.h"
 
 namespace
 {
@@ -40,12 +41,14 @@ namespace
     constexpr float kHudBottomY = 24.0f;
     constexpr float kCloudInfoOffsetY = 100.0f; // 스카이 정보 밑에 이어 붙인다
 
+    // ---- 오른쪽 하단 버튼 패널 (픽셀) ----
+    constexpr float kButtonRowHeight = 26.0f;
+
     constexpr wchar_t kHelpText[] =
         L"[카메라]  이동 W/A/S/D   상하 E/Q   시점 마우스 우클릭 드래그   속도 휠   가속 Shift   리셋 R\n"
-        L"[높이맵]  항목 선택 ↑/↓   값 조절 ←/→ (연속)   다음 파일 N   고도 색상 C   다시 읽기 F5\n"
+        L"[높이맵]  항목 선택 ↑/↓   값 조절 ←/→ (누르고 있으면 연속)\n"
         L"[그리드]  분할 수 + / -   셀 크기 [ / ]   표시 모드 Tab\n"
-        L"[스카이]  시간 되감기/감기 , / . (연속)   자동 재생 T   프리셋 순환 Y   태양 각크기 I/K   글로우 U/J\n"
-        L"[구름]    표시 켬/끄기 L   커버리지 G/H   워프 세기 V/B   바람 속도 O/P   기본값(모두) 0        [메뉴로] ESC";
+        L"[높이맵 / 스카이 / 구름]  그 외 조작은 우측 버튼                                          [메뉴로] ESC";
 }
 
 void BuildCloudScene(Scene& scene)
@@ -149,4 +152,64 @@ void BuildCloudScene(Scene& scene)
     cloudControl->SetTarget(cloud);
     cloudControl->SetSky(sky);
     cloudControl->SetInfoText(cloudInfoText);
+
+    // ---------------- 오른쪽 하단 버튼 패널 ----------------
+    // 예전에 N / C / F5 / 0 키였던 조작들(높이맵), , / . / T / Y / I / K / U / J / 0 키였던
+    // 조작들(스카이), L / G / H / V / B / O / P / 0 키였던 조작들(구름)을 버튼으로 옮긴다.
+    // 항목 선택(↑/↓)과 값 조절(←/→)처럼 여러 기법이 공통으로 쓰는 조작은 그대로 키보드로
+    // 남아 있다. 시간 스크럽 버튼 두 개는 누르고 있으면 계속 반응하도록
+    // SetRepeatWhileHeld(true) 로 설정한다(예전 , / . 키와 동일).
+    float buttonY = kHudBottomY;
+    auto AddButton = [&](const char* name, const std::wstring& text, const UIButton::ClickCallback& onClick, bool repeatWhileHeld = false)
+    {
+        GameObject* obj = scene.CreateGameObject(name);
+        UIButton* button = obj->AddComponent<UIButton>();
+        button->SetText(text);
+        button->SetFontSize(kHudFontSize);
+        button->SetAnchor(UIAnchor::BottomRight);
+        button->SetOffset(kHudMarginX, buttonY);
+        button->SetColor(1.0f, 1.0f, 1.0f);
+        button->SetOnClick(onClick);
+        button->SetRepeatWhileHeld(repeatWhileHeld);
+        buttonY += kButtonRowHeight;
+    };
+
+    auto AddHeader = [&](const char* name, const std::wstring& text, float r, float g, float b)
+    {
+        GameObject* obj = scene.CreateGameObject(name);
+        UIText* header = obj->AddComponent<UIText>();
+        header->SetText(text);
+        header->SetFontSize(kHudFontSize);
+        header->SetAnchor(UIAnchor::BottomRight);
+        header->SetOffset(kHudMarginX, buttonY);
+        header->SetColor(r, g, b);
+        buttonY += kButtonRowHeight;
+    };
+
+    AddButton("CloudResetButton", L"기본값 복귀", [cloudControl]() { cloudControl->ResetToDefault(); });
+    AddButton("CloudWindSpeedIncButton", L"바람 속도 증가", [cloudControl]() { cloudControl->IncreaseWindSpeed(); });
+    AddButton("CloudWindSpeedDecButton", L"바람 속도 감소", [cloudControl]() { cloudControl->DecreaseWindSpeed(); });
+    AddButton("CloudWarpIncButton", L"워프 세기 증가", [cloudControl]() { cloudControl->IncreaseWarpStrength(); });
+    AddButton("CloudWarpDecButton", L"워프 세기 감소", [cloudControl]() { cloudControl->DecreaseWarpStrength(); });
+    AddButton("CloudCoverageDecButton", L"구름 많게", [cloudControl]() { cloudControl->DecreaseCoverage(); });
+    AddButton("CloudCoverageIncButton", L"구름 적게", [cloudControl]() { cloudControl->IncreaseCoverage(); });
+    AddButton("CloudVisibleButton", L"구름 표시 켬/끔", [cloudControl]() { cloudControl->ToggleVisible(); });
+    AddHeader("CloudHeader", L"[구름]", 0.85f, 0.9f, 1.0f);
+
+    AddButton("SkyResetButton", L"기본값 복귀", [skyControl]() { skyControl->ResetToDefault(); });
+    AddButton("SkyGlowWeakerButton", L"글로우 강하게", [skyControl]() { skyControl->DecreaseGlowExponent(); });
+    AddButton("SkyGlowStrongerButton", L"글로우 약하게", [skyControl]() { skyControl->IncreaseGlowExponent(); });
+    AddButton("SkySunSizeIncButton", L"태양 각크기 증가", [skyControl]() { skyControl->IncreaseSunSize(); });
+    AddButton("SkySunSizeDecButton", L"태양 각크기 감소", [skyControl]() { skyControl->DecreaseSunSize(); });
+    AddButton("SkyCyclePresetButton", L"프리셋 순환", [skyControl]() { skyControl->CyclePreset(); });
+    AddButton("SkyAutoPlayButton", L"자동 재생 켬/끔", [skyControl]() { skyControl->ToggleAutoPlay(); });
+    AddButton("SkyTimeForwardButton", L"시간 감기", [skyControl]() { skyControl->StepTimeForward(); }, true);
+    AddButton("SkyTimeBackwardButton", L"시간 되감기", [skyControl]() { skyControl->StepTimeBackward(); }, true);
+    AddHeader("SkyHeader", L"[스카이]", 1.0f, 0.9f, 0.7f);
+
+    AddButton("HeightMapResetButton", L"기본값 복귀", [control]() { control->ResetToDefault(); });
+    AddButton("HeightMapReloadButton", L"폴더 다시 읽기", [control]() { control->ReloadFiles(); });
+    AddButton("HeightMapColorButton", L"고도 색상 켬/끔", [control]() { control->ToggleHeightColorMode(); });
+    AddButton("HeightMapNextFileButton", L"다음 높이맵 파일", [control]() { control->NextFile(); });
+    AddHeader("HeightMapHeader", L"[높이맵]", 1.0f, 1.0f, 1.0f);
 }

@@ -8,6 +8,7 @@
 #include "../../Terrain/TerrainRenderer.h"
 #include "../../Terrain/PerlinNoise.h"
 #include "../../UI/UIText.h"
+#include "../../UI/UIButton.h"
 
 namespace
 {
@@ -27,9 +28,12 @@ namespace
     constexpr float kHudTopY = 72.0f;      // 좌상단 "돌아가기" 버튼 아래
     constexpr float kHudBottomY = 24.0f;
 
+    // ---- 오른쪽 하단 버튼 패널 (픽셀) ----
+    constexpr float kButtonRowHeight = 26.0f;
+
     constexpr wchar_t kHelpText[] =
         L"[카메라]  이동 W/A/S/D   상하 E/Q   시점 마우스 우클릭 드래그   속도 휠   가속 Shift   리셋 R\n"
-        L"[노이즈]  항목 선택 ↑/↓   값 조절 ←/→ (누르고 있으면 연속)   합성 방식 N   시드 무작위 M   기본값 0\n"
+        L"[노이즈]  항목 선택 ↑/↓   값 조절 ←/→ (누르고 있으면 연속)   그 외 조작은 우측 버튼\n"
         L"[그리드]  분할 수 + / -   셀 크기 [ / ]   표시 모드 Tab                                   [메뉴로] ESC";
 }
 
@@ -95,4 +99,25 @@ void BuildPerlinNoiseScene(Scene& scene)
     control->SetTarget(terrain);
     control->SetInfoText(infoText);
     control->SetParams(params);
+
+    // ---------------- 오른쪽 하단 버튼 패널 ----------------
+    // 예전에 N / M / 0 키였던 조작들. 항목 선택(↑/↓)과 값 조절(←/→)처럼 여러 기법이
+    // 공통으로 쓰는 조작은 그대로 키보드로 남아 있다.
+    float buttonY = kHudBottomY;
+    auto AddButton = [&](const char* name, const std::wstring& text, const UIButton::ClickCallback& onClick)
+    {
+        GameObject* obj = scene.CreateGameObject(name);
+        UIButton* button = obj->AddComponent<UIButton>();
+        button->SetText(text);
+        button->SetFontSize(kHudFontSize);
+        button->SetAnchor(UIAnchor::BottomRight);
+        button->SetOffset(kHudMarginX, buttonY);
+        button->SetColor(1.0f, 1.0f, 1.0f);
+        button->SetOnClick(onClick);
+        buttonY += kButtonRowHeight;
+    };
+
+    AddButton("PerlinResetButton", L"기본값 복귀", [control]() { control->ResetToDefault(); });
+    AddButton("PerlinRandomSeedButton", L"시드 무작위", [control]() { control->RandomizeSeed(); });
+    AddButton("PerlinCycleTypeButton", L"합성 방식 전환", [control]() { control->CycleNoiseType(); });
 }

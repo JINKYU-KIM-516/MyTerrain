@@ -9,6 +9,7 @@
 #include "../../Terrain/TerrainRenderer.h"
 #include "../../Terrain/HeightMap.h"
 #include "../../UI/UIText.h"
+#include "../../UI/UIButton.h"
 
 namespace
 {
@@ -27,10 +28,13 @@ namespace
     constexpr float kHudTopY = 72.0f;      // 좌상단 "돌아가기" 버튼 아래
     constexpr float kHudBottomY = 24.0f;
 
+    // ---- 오른쪽 하단 버튼 패널 (픽셀) ----
+    constexpr float kButtonRowHeight = 26.0f;
+
     constexpr wchar_t kHelpText[] =
         L"[카메라]  이동 W/A/S/D   상하 E/Q   시점 마우스 우클릭 드래그   속도 휠   가속 Shift   리셋 R\n"
-        L"[높이맵]  항목 선택 ↑/↓   값 조절 ←/→ (누르고 있으면 연속)   다음 파일 N   고도 색상(비교용) C   다시 읽기 F5   기본값 0\n"
-        L"[스플래팅]  켬/끔 V   타일링 I/K   경사 구간 U/J   기본값 0\n"
+        L"[높이맵]  항목 선택 ↑/↓   값 조절 ←/→ (누르고 있으면 연속)\n"
+        L"[스플래팅 / 높이맵]  그 외 조작은 우측 버튼\n"
         L"[그리드]  분할 수 + / -   셀 크기 [ / ]   표시 모드 Tab                                   [메뉴로] ESC";
 }
 
@@ -60,7 +64,7 @@ void BuildTextureSplattingScene(Scene& scene)
     terrain->SetCheckerScale(kCheckerScale);
 
     // 4번은 스플래팅이 주인공이므로 고도 색상은 꺼둔 채로 시작한다.
-    // (HeightMapControlComponent 의 C 키로 언제든 켜서 스플래팅과 비교해볼 수 있다 --
+    // (HeightMapControlComponent 의 버튼으로 언제든 켜서 스플래팅과 비교해볼 수 있다 --
     //  스플래팅이 우선이므로 둘 다 켜져 있으면 셰이더가 스플래팅을 그린다)
     terrain->SetHeightColorMode(false);
 
@@ -112,4 +116,48 @@ void BuildTextureSplattingScene(Scene& scene)
     SplatControlComponent* splatControl = splatControlObject->AddComponent<SplatControlComponent>();
     splatControl->SetTarget(terrain);
     splatControl->SetInfoText(splatInfoText);
+
+    // ---------------- 오른쪽 하단 버튼 패널 ----------------
+    // 예전에 N / C / F5 / 0 키였던 조작들(높이맵)과 M / , / . / [ / ] / 0 키였던
+    // 조작들(스플래팅)을 버튼으로 옮긴다. 항목 선택(↑/↓)과 값 조절(←/→)처럼 여러
+    // 기법이 공통으로 쓰는 조작은 그대로 키보드로 남아 있다.
+    float buttonY = kHudBottomY;
+    auto AddButton = [&](const char* name, const std::wstring& text, const UIButton::ClickCallback& onClick)
+    {
+        GameObject* obj = scene.CreateGameObject(name);
+        UIButton* button = obj->AddComponent<UIButton>();
+        button->SetText(text);
+        button->SetFontSize(kHudFontSize);
+        button->SetAnchor(UIAnchor::BottomRight);
+        button->SetOffset(kHudMarginX, buttonY);
+        button->SetColor(1.0f, 1.0f, 1.0f);
+        button->SetOnClick(onClick);
+        buttonY += kButtonRowHeight;
+    };
+
+    auto AddHeader = [&](const char* name, const std::wstring& text, float r, float g, float b)
+    {
+        GameObject* obj = scene.CreateGameObject(name);
+        UIText* header = obj->AddComponent<UIText>();
+        header->SetText(text);
+        header->SetFontSize(kHudFontSize);
+        header->SetAnchor(UIAnchor::BottomRight);
+        header->SetOffset(kHudMarginX, buttonY);
+        header->SetColor(r, g, b);
+        buttonY += kButtonRowHeight;
+    };
+
+    AddButton("SplatResetButton", L"기본값 복귀", [splatControl]() { splatControl->ResetToDefault(); });
+    AddButton("SplatSlopeNarrowButton", L"경사 범위 좁게", [splatControl]() { splatControl->NarrowSlopeRange(); });
+    AddButton("SplatSlopeWidenButton", L"경사 범위 넓게", [splatControl]() { splatControl->WidenSlopeRange(); });
+    AddButton("SplatTilingDecButton", L"타일링 감소", [splatControl]() { splatControl->DecreaseTiling(); });
+    AddButton("SplatTilingIncButton", L"타일링 증가", [splatControl]() { splatControl->IncreaseTiling(); });
+    AddButton("SplatModeButton", L"모드 전환", [splatControl]() { splatControl->ToggleSplatMode(); });
+    AddHeader("SplatHeader", L"[스플래팅]", 1.0f, 1.0f, 1.0f);
+
+    AddButton("HeightMapResetButton", L"기본값 복귀", [heightControl]() { heightControl->ResetToDefault(); });
+    AddButton("HeightMapReloadButton", L"폴더 다시 읽기", [heightControl]() { heightControl->ReloadFiles(); });
+    AddButton("HeightMapColorButton", L"고도 색상 켬/끔", [heightControl]() { heightControl->ToggleHeightColorMode(); });
+    AddButton("HeightMapNextFileButton", L"다음 높이맵 파일", [heightControl]() { heightControl->NextFile(); });
+    AddHeader("HeightMapHeader", L"[높이맵]", 1.0f, 1.0f, 1.0f);
 }

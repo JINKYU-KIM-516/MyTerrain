@@ -15,10 +15,9 @@ class UIText;
 // 건드리지 않고도(=3번 코드를 하나도 고치지 않고도) 독립적으로 얹을 수 있기 때문이다.
 // HUD 도 별도의 UIText 를 받아 따로 표시한다.
 //
-//   V        스플래팅 켬/끔 (끄면 3번과 같은 고도 색상/체커로 돌아간다)
-//   I / K    텍스처 타일링 배율 올리기 / 내리기
-//   U / J    경사 임계값 구간을 넓히기 / 좁히기 (급경사일수록 바위로 전이되는 구간)
-//   0(넘패드 포함)  스플래팅 파라미터를 기본값으로 (HeightMapControlComponent 의 0 키와는 별개)
+// 조작은 전부 화면 버튼으로 한다 (스플래팅 켬/끔, 타일링 배율 올리기/내리기,
+// 경사 임계값 구간 넓히기/좁히기, 기본값 복귀는 HeightMapControlComponent의 기본값
+// 복귀와는 별개).
 class SplatControlComponent : public Component
 {
 public:
@@ -28,6 +27,14 @@ public:
 
     void SetTarget(TerrainRenderer* terrain) { m_terrain = terrain; }
     void SetInfoText(UIText* infoText) { m_infoText = infoText; }
+
+    // ---- 버튼용 동작 (예전에는 각각 V / I / K / U / J / 0 키였다) ----
+    void ToggleSplatMode();
+    void IncreaseTiling();
+    void DecreaseTiling();
+    void WidenSlopeRange();
+    void NarrowSlopeRange();
+    void ResetToDefault();
 
 private:
     void ApplySplatParams();

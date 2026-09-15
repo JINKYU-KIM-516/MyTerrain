@@ -11,18 +11,12 @@ class UIText;
 //   - 이음매(crack)  -> H (스티칭)
 //   - 팝핑(popping)  -> G (지오머핑)
 //
-//   H        스티칭 켬/끔 (끄면 6-1 처럼 레벨 경계에 틈이 보인다)
-//   G        지오머핑 켬/끔 (끄면 레벨이 바뀌는 순간 지형이 툭 튄다)
-//   V        morph 계수 시각화 (파랑 = 아직 안 움직임, 빨강 = 다음 레벨과 같아짐)
-//   O / P    morph 구간 폭 줄이기 / 늘리기 (0 ~ 0.5)
-//   K        레벨 색상 표시 켬/끔
-//   F        LOD 프리즈 (지금 카메라 위치로 레벨 고정 -- 경계까지 날아가서 관찰용)
-//   C        절두체 컬링 켬/끔
-//   B        청크 경계 박스 표시 켬/끔
-//   , / .    청크 크기 줄이기 / 늘리기
-//   ; / '    기준 거리 줄이기 / 늘리기
-//   U / I    LOD 레벨 수 줄이기 / 늘리기
-//   0        기본값으로 복귀
+// 아래는 전부 화면 버튼으로 조작한다.
+//   스티칭 켬/끔(끄면 6-1 처럼 레벨 경계에 틈이 보인다) / 지오머핑 켬/끔(끄면 레벨이
+//   바뀌는 순간 지형이 툭 튄다) / morph 계수 시각화(파랑 = 아직 안 움직임, 빨강 = 다음
+//   레벨과 같아짐) / morph 구간 폭 조절(0 ~ 0.5) / 레벨 색상 표시 / LOD 프리즈(지금
+//   카메라 위치로 레벨 고정 -- 경계까지 날아가서 관찰용) / 절두체 컬링 / 청크 경계 박스
+//   표시 / 청크 크기 조절 / 기준 거리 조절 / LOD 레벨 수 조절 / 기본값 복귀
 //
 // 이웃 레벨 차이 1 제한은 스티칭의 전제라 여기서는 끌 수 없다 (렌더러가 강제한다).
 class GeoLodControlComponent : public Component
@@ -33,6 +27,24 @@ public:
 
     void SetTarget(TerrainRenderer* terrain) { m_terrain = terrain; }
     void SetInfoText(UIText* infoText) { m_infoText = infoText; }
+
+    // ---- 버튼용 동작 (예전에는 각각 H / G / V / O / P / K / F / C / B / , / . / ; / ' / U / I / 0 키였다) ----
+    void ToggleStitching();
+    void ToggleMorphing();
+    void ToggleMorphColorMode();
+    void DecreaseMorphWidth();
+    void IncreaseMorphWidth();
+    void ToggleColorMode();
+    void ToggleFrozen();
+    void ToggleCulling();
+    void ToggleDebugBoxes();
+    void DecreaseChunkSize();
+    void IncreaseChunkSize();
+    void DecreaseBaseDistance();   // 누르고 있으면 연속으로 줄어든다
+    void IncreaseBaseDistance();   // 누르고 있으면 연속으로 늘어난다
+    void DecreaseLevelCount();
+    void IncreaseLevelCount();
+    void ResetToDefault();
 
 private:
     void ApplyAll();

@@ -1,5 +1,4 @@
 ﻿#include "GeoLodControlComponent.h"
-#include "../Framework/InputManager.h"
 #include "../Terrain/TerrainRenderer.h"
 #include "../UI/UIText.h"
 
@@ -49,136 +48,164 @@ void GeoLodControlComponent::Update(float deltaTime)
         return;
     }
 
-    InputManager& input = InputManager::GetInstance();
-    bool changed = false;
-
-    // ---------------- 이번 기법의 주인공 두 개 ----------------
-    if (input.IsKeyPressed('H'))
-    {
-        m_stitchEnabled = !m_stitchEnabled;
-        m_terrain->SetLodStitchEnabled(m_stitchEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('G'))
-    {
-        m_morphEnabled = !m_morphEnabled;
-        m_terrain->SetLodMorphEnabled(m_morphEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('V'))
-    {
-        m_morphColorMode = !m_morphColorMode;
-        m_terrain->SetLodMorphColorMode(m_morphColorMode);
-        changed = true;
-    }
-
-    // morph 구간 폭 (O / P)
-    if (input.IsKeyPressed('O'))
-    {
-        m_morphWidth = std::max(m_morphWidth - kMorphWidthStep, 0.0f);
-        m_terrain->SetLodMorphWidth(m_morphWidth);
-        changed = true;
-    }
-    if (input.IsKeyPressed('P'))
-    {
-        m_morphWidth = std::min(m_morphWidth + kMorphWidthStep, 0.5f);
-        m_terrain->SetLodMorphWidth(m_morphWidth);
-        changed = true;
-    }
-
-    // ---------------- 6-1 에서 가져온 조작 ----------------
-    if (input.IsKeyPressed('K'))
-    {
-        m_colorMode = !m_colorMode;
-        m_terrain->SetLodColorMode(m_colorMode);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('F'))
-    {
-        m_frozen = !m_frozen;
-        m_terrain->SetLodFrozen(m_frozen);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('C'))
-    {
-        m_cullingEnabled = !m_cullingEnabled;
-        m_terrain->SetLodFrustumCullingEnabled(m_cullingEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('B'))
-    {
-        m_debugBoxesEnabled = !m_debugBoxesEnabled;
-        m_terrain->SetLodDebugBoxesEnabled(m_debugBoxesEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed(VK_OEM_COMMA) && m_chunkSizeIndex > 0)
-    {
-        --m_chunkSizeIndex;
-        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
-        changed = true;
-    }
-    if (input.IsKeyPressed(VK_OEM_PERIOD) && m_chunkSizeIndex < kChunkSizeStepCount - 1)
-    {
-        ++m_chunkSizeIndex;
-        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
-        changed = true;
-    }
-
-    if (input.IsKeyDown(VK_OEM_1))          // ';'
-    {
-        m_baseDistance = std::max(m_baseDistance / kBaseDistanceFactor, kMinBaseDistance);
-        m_terrain->SetLodBaseDistance(m_baseDistance);
-        changed = true;
-    }
-    if (input.IsKeyDown(VK_OEM_7))          // '\''
-    {
-        m_baseDistance = std::min(m_baseDistance * kBaseDistanceFactor, kMaxBaseDistance);
-        m_terrain->SetLodBaseDistance(m_baseDistance);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('U') && m_levelCount > kMinLevelCount)
-    {
-        --m_levelCount;
-        m_terrain->SetLodLevelCount(m_levelCount);
-        changed = true;
-    }
-    if (input.IsKeyPressed('I') && m_levelCount < kMaxLevelCount)
-    {
-        ++m_levelCount;
-        m_terrain->SetLodLevelCount(m_levelCount);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_chunkSizeIndex = kDefaultChunkSizeIndex;
-        m_levelCount = kDefaultLevelCount;
-        m_baseDistance = kDefaultBaseDistance;
-        m_morphWidth = kDefaultMorphWidth;
-        m_stitchEnabled = true;
-        m_morphEnabled = true;
-        m_morphColorMode = false;
-        m_colorMode = false;
-        m_frozen = false;
-        m_cullingEnabled = true;
-        m_debugBoxesEnabled = false;
-        ApplyAll();
-        changed = true;
-    }
+    // 조작은 전부 화면 버튼으로 옮겨졌다.
 
     m_refreshTimer += deltaTime;
-    if (changed || m_refreshTimer >= kRefreshInterval)
+    if (m_refreshTimer >= kRefreshInterval)
     {
         m_refreshTimer = 0.0f;
         RefreshInfoText();
     }
+}
+
+// ---- 버튼용 동작 (예전 H 키) ----
+void GeoLodControlComponent::ToggleStitching()
+{
+    m_stitchEnabled = !m_stitchEnabled;
+    m_terrain->SetLodStitchEnabled(m_stitchEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 G 키) ----
+void GeoLodControlComponent::ToggleMorphing()
+{
+    m_morphEnabled = !m_morphEnabled;
+    m_terrain->SetLodMorphEnabled(m_morphEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 V 키) ----
+void GeoLodControlComponent::ToggleMorphColorMode()
+{
+    m_morphColorMode = !m_morphColorMode;
+    m_terrain->SetLodMorphColorMode(m_morphColorMode);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 O 키) ----
+void GeoLodControlComponent::DecreaseMorphWidth()
+{
+    m_morphWidth = std::max(m_morphWidth - kMorphWidthStep, 0.0f);
+    m_terrain->SetLodMorphWidth(m_morphWidth);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 P 키) ----
+void GeoLodControlComponent::IncreaseMorphWidth()
+{
+    m_morphWidth = std::min(m_morphWidth + kMorphWidthStep, 0.5f);
+    m_terrain->SetLodMorphWidth(m_morphWidth);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 K 키) ----
+void GeoLodControlComponent::ToggleColorMode()
+{
+    m_colorMode = !m_colorMode;
+    m_terrain->SetLodColorMode(m_colorMode);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 F 키) ----
+void GeoLodControlComponent::ToggleFrozen()
+{
+    m_frozen = !m_frozen;
+    m_terrain->SetLodFrozen(m_frozen);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 C 키) ----
+void GeoLodControlComponent::ToggleCulling()
+{
+    m_cullingEnabled = !m_cullingEnabled;
+    m_terrain->SetLodFrustumCullingEnabled(m_cullingEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 B 키) ----
+void GeoLodControlComponent::ToggleDebugBoxes()
+{
+    m_debugBoxesEnabled = !m_debugBoxesEnabled;
+    m_terrain->SetLodDebugBoxesEnabled(m_debugBoxesEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 ',' 키) ----
+void GeoLodControlComponent::DecreaseChunkSize()
+{
+    if (m_chunkSizeIndex > 0)
+    {
+        --m_chunkSizeIndex;
+        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 '.' 키) ----
+void GeoLodControlComponent::IncreaseChunkSize()
+{
+    if (m_chunkSizeIndex < kChunkSizeStepCount - 1)
+    {
+        ++m_chunkSizeIndex;
+        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 ';' 키. 버튼도 SetRepeatWhileHeld(true) 로 등록한다) ----
+void GeoLodControlComponent::DecreaseBaseDistance()
+{
+    m_baseDistance = std::max(m_baseDistance / kBaseDistanceFactor, kMinBaseDistance);
+    m_terrain->SetLodBaseDistance(m_baseDistance);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 '\'' 키) ----
+void GeoLodControlComponent::IncreaseBaseDistance()
+{
+    m_baseDistance = std::min(m_baseDistance * kBaseDistanceFactor, kMaxBaseDistance);
+    m_terrain->SetLodBaseDistance(m_baseDistance);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 U 키) ----
+void GeoLodControlComponent::DecreaseLevelCount()
+{
+    if (m_levelCount > kMinLevelCount)
+    {
+        --m_levelCount;
+        m_terrain->SetLodLevelCount(m_levelCount);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 I 키) ----
+void GeoLodControlComponent::IncreaseLevelCount()
+{
+    if (m_levelCount < kMaxLevelCount)
+    {
+        ++m_levelCount;
+        m_terrain->SetLodLevelCount(m_levelCount);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void GeoLodControlComponent::ResetToDefault()
+{
+    m_chunkSizeIndex = kDefaultChunkSizeIndex;
+    m_levelCount = kDefaultLevelCount;
+    m_baseDistance = kDefaultBaseDistance;
+    m_morphWidth = kDefaultMorphWidth;
+    m_stitchEnabled = true;
+    m_morphEnabled = true;
+    m_morphColorMode = false;
+    m_colorMode = false;
+    m_frozen = false;
+    m_cullingEnabled = true;
+    m_debugBoxesEnabled = false;
+    ApplyAll();
+    RefreshInfoText();
 }
 
 std::wstring GeoLodControlComponent::FormatThousands(size_t value)
@@ -242,9 +269,7 @@ void GeoLodControlComponent::RefreshInfoText()
     wchar_t buffer[1100] = {};
 
     std::swprintf(buffer, 1100,
-        L"[고급 거리 LOD]  스티칭 H   지오머핑 G   morph 시각화 V   morph 폭 O / P\n"
-        L"                 레벨 색상 K   프리즈 F   컬링 C   박스 B\n"
-        L"                 청크 , / .   거리 ; / '   레벨수 U / I   기본값 0\n"
+        L"[고급 거리 LOD]\n"
         L"스티칭 %s   지오머핑 %s   morph 폭 %.2f   morph 시각화 %s\n"
         L"청크 : %d x %d 셀   %zu 개 중 %zu 개 그림   그중 테두리를 다시 엮은 청크 %zu 개\n"
         L"매 프레임 새로 만든 테두리 인덱스 : %s 개\n"

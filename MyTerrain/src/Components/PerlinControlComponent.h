@@ -10,9 +10,9 @@
 //
 //   위 / 아래        조절할 파라미터 선택
 //   왼쪽 / 오른쪽    선택한 파라미터 값 조절 (누르고 있으면 연속)
-//   N                합성 방식 전환 (fBm -> Ridged -> Billow)
-//   M                시드 무작위
-//   0                기법이 정해둔 기본값으로 복귀
+//
+// 그 외(합성 방식 전환 / 시드 무작위 / 기본값 복귀)는 화면의 버튼으로 조작한다
+// (CycleNoiseType / RandomizeSeed / ResetToDefault).
 //
 // 파라미터가 바뀌면 그 자리에서 메시를 다시 만들고(TerrainRenderer::RequestRebuild),
 // 재생성에 걸린 시간과 실제로 나온 높이 범위를 HUD 에 보여준다.
@@ -42,6 +42,11 @@ public:
 
     // TerrainRenderer 에 넘길 높이 함수 (Start 에서 자동으로 연결된다)
     GridMesh::HeightFunc MakeHeightFunction();
+
+    // ---- 버튼용 동작 (예전에는 각각 N / M / 0 키였다) ----
+    void CycleNoiseType();
+    void RandomizeSeed();
+    void ResetToDefault();
 
 protected:
     void RefreshInfoText() override;

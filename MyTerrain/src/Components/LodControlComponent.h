@@ -11,18 +11,13 @@ class UIText;
 // 그대로 맡는다. 이 컴포넌트는 그 위에 "청크마다 카메라까지의 거리로 해상도를 고른다"는
 // 부분만 얹는다 -- QuadtreeControlComponent 와 같은 이유로 독립 컴포넌트로 둔다.
 //
-//   L        LOD 켬/끔 (끄면 모든 청크를 레벨 0 으로 그린다. Draw 호출 수는 그대로라
-//            삼각형 수의 차이만 순수하게 비교할 수 있다)
-//   K        레벨 색상 표시 켬/끔 (초록 -> 노랑 -> 주황 -> 빨강 -> 보라)
-//   F        LOD 프리즈 : 지금 카메라 위치로 레벨을 고정한다. 컬링은 계속 따라가므로
-//            레벨 경계까지 날아가서 이음매(crack)를 코앞에서 관찰할 수 있다
-//   J        이웃 청크와의 레벨 차이를 1 이하로 제한 (이음매 완화 -- 없애지는 못한다)
-//   C        절두체 컬링 켬/끔
-//   B        청크 경계 박스 표시 켬/끔
-//   , / .    청크 크기 줄이기 / 늘리기
-//   ; / '    기준 거리(레벨 0 이 유지되는 거리) 줄이기 / 늘리기
-//   U / I    LOD 레벨 수 줄이기 / 늘리기
-//   0        기본값으로 복귀
+// 아래는 전부 화면 버튼으로 조작한다.
+//   LOD 켬/끔 (끄면 모든 청크를 레벨 0 으로 그린다. Draw 호출 수는 그대로라
+//   삼각형 수의 차이만 순수하게 비교할 수 있다) / 레벨 색상 표시(초록->노랑->주황->빨강->보라)
+//   / LOD 프리즈(지금 카메라 위치로 레벨을 고정한다. 컬링은 계속 따라가므로 레벨 경계까지
+//   날아가서 이음매(crack)를 코앞에서 관찰할 수 있다) / 이웃 청크와의 레벨 차이를 1 이하로
+//   제한(이음매 완화 -- 없애지는 못한다) / 절두체 컬링 / 청크 경계 박스 표시 / 청크 크기
+//   조절 / 기준 거리(레벨 0 이 유지되는 거리) 조절 / LOD 레벨 수 조절 / 기본값 복귀
 class LodControlComponent : public Component
 {
 public:
@@ -31,6 +26,21 @@ public:
 
     void SetTarget(TerrainRenderer* terrain) { m_terrain = terrain; }
     void SetInfoText(UIText* infoText) { m_infoText = infoText; }
+
+    // ---- 버튼용 동작 (예전에는 각각 L / K / F / J / C / B / , / . / ; / ' / U / I / 0 키였다) ----
+    void ToggleLod();
+    void ToggleColorMode();
+    void ToggleFrozen();
+    void ToggleNeighborClamp();
+    void ToggleCulling();
+    void ToggleDebugBoxes();
+    void DecreaseChunkSize();
+    void IncreaseChunkSize();
+    void DecreaseBaseDistance();   // 누르고 있으면 연속으로 줄어든다
+    void IncreaseBaseDistance();   // 누르고 있으면 연속으로 늘어난다
+    void DecreaseLevelCount();
+    void IncreaseLevelCount();
+    void ResetToDefault();
 
 private:
     void ApplyAll();

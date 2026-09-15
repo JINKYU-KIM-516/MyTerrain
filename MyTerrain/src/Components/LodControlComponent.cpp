@@ -1,5 +1,4 @@
 ﻿#include "LodControlComponent.h"
-#include "../Framework/InputManager.h"
 #include "../Terrain/TerrainRenderer.h"
 #include "../UI/UIText.h"
 
@@ -41,118 +40,142 @@ void LodControlComponent::Update(float deltaTime)
         return;
     }
 
-    InputManager& input = InputManager::GetInstance();
-    bool changed = false;
-
-    // ---------------- 켬/끔 토글 ----------------
-    if (input.IsKeyPressed('L'))
-    {
-        m_lodEnabled = !m_lodEnabled;
-        m_terrain->SetLodEnabled(m_lodEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('K'))
-    {
-        m_colorMode = !m_colorMode;
-        m_terrain->SetLodColorMode(m_colorMode);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('F'))
-    {
-        // 켜는 순간의 카메라 위치를 렌더러가 붙잡는다 (다음 프레임 선택부터 고정된다).
-        m_frozen = !m_frozen;
-        m_terrain->SetLodFrozen(m_frozen);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('J'))
-    {
-        m_neighborClamp = !m_neighborClamp;
-        m_terrain->SetLodNeighborClampEnabled(m_neighborClamp);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('C'))
-    {
-        m_cullingEnabled = !m_cullingEnabled;
-        m_terrain->SetLodFrustumCullingEnabled(m_cullingEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('B'))
-    {
-        m_debugBoxesEnabled = !m_debugBoxesEnabled;
-        m_terrain->SetLodDebugBoxesEnabled(m_debugBoxesEnabled);
-        changed = true;
-    }
-
-    // ---------------- 청크 크기 (, / .) ----------------
-    if (input.IsKeyPressed(VK_OEM_COMMA) && m_chunkSizeIndex > 0)
-    {
-        --m_chunkSizeIndex;
-        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
-        changed = true;
-    }
-    if (input.IsKeyPressed(VK_OEM_PERIOD) && m_chunkSizeIndex < kChunkSizeStepCount - 1)
-    {
-        ++m_chunkSizeIndex;
-        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
-        changed = true;
-    }
-
-    // ---------------- 기준 거리 (; / ') ----------------
-    // 거리는 인덱스를 다시 만들지 않으므로 누르고 있는 동안 계속 반응해도 부담이 없다.
-    if (input.IsKeyDown(VK_OEM_1))          // ';'
-    {
-        m_baseDistance = std::max(m_baseDistance / kBaseDistanceFactor, kMinBaseDistance);
-        m_terrain->SetLodBaseDistance(m_baseDistance);
-        changed = true;
-    }
-    if (input.IsKeyDown(VK_OEM_7))          // '\''
-    {
-        m_baseDistance = std::min(m_baseDistance * kBaseDistanceFactor, kMaxBaseDistance);
-        m_terrain->SetLodBaseDistance(m_baseDistance);
-        changed = true;
-    }
-
-    // ---------------- 레벨 수 (U / I) ----------------
-    if (input.IsKeyPressed('U') && m_levelCount > kMinLevelCount)
-    {
-        --m_levelCount;
-        m_terrain->SetLodLevelCount(m_levelCount);
-        changed = true;
-    }
-    if (input.IsKeyPressed('I') && m_levelCount < kMaxLevelCount)
-    {
-        ++m_levelCount;
-        m_terrain->SetLodLevelCount(m_levelCount);
-        changed = true;
-    }
-
-    // ---------------- 기본값 복귀 ----------------
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_chunkSizeIndex = kDefaultChunkSizeIndex;
-        m_levelCount = kDefaultLevelCount;
-        m_baseDistance = kDefaultBaseDistance;
-        m_lodEnabled = true;
-        m_colorMode = true;
-        m_frozen = false;
-        m_neighborClamp = false;
-        m_cullingEnabled = true;
-        m_debugBoxesEnabled = false;
-        ApplyAll();
-        changed = true;
-    }
+    // 조작(LOD/색상/프리즈/이웃제한/컬링/박스 토글, 청크 크기, 기준 거리, 레벨 수,
+    // 기본값)은 전부 화면 버튼으로 옮겨졌다.
 
     m_refreshTimer += deltaTime;
-    if (changed || m_refreshTimer >= kRefreshInterval)
+    if (m_refreshTimer >= kRefreshInterval)
     {
         m_refreshTimer = 0.0f;
         RefreshInfoText();
     }
+}
+
+// ---- 버튼용 동작 (예전 L 키) ----
+void LodControlComponent::ToggleLod()
+{
+    m_lodEnabled = !m_lodEnabled;
+    m_terrain->SetLodEnabled(m_lodEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 K 키) ----
+void LodControlComponent::ToggleColorMode()
+{
+    m_colorMode = !m_colorMode;
+    m_terrain->SetLodColorMode(m_colorMode);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 F 키) ----
+// 켜는 순간의 카메라 위치를 렌더러가 붙잡는다 (다음 프레임 선택부터 고정된다).
+void LodControlComponent::ToggleFrozen()
+{
+    m_frozen = !m_frozen;
+    m_terrain->SetLodFrozen(m_frozen);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 J 키) ----
+void LodControlComponent::ToggleNeighborClamp()
+{
+    m_neighborClamp = !m_neighborClamp;
+    m_terrain->SetLodNeighborClampEnabled(m_neighborClamp);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 C 키) ----
+void LodControlComponent::ToggleCulling()
+{
+    m_cullingEnabled = !m_cullingEnabled;
+    m_terrain->SetLodFrustumCullingEnabled(m_cullingEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 B 키) ----
+void LodControlComponent::ToggleDebugBoxes()
+{
+    m_debugBoxesEnabled = !m_debugBoxesEnabled;
+    m_terrain->SetLodDebugBoxesEnabled(m_debugBoxesEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 ',' 키) ----
+void LodControlComponent::DecreaseChunkSize()
+{
+    if (m_chunkSizeIndex > 0)
+    {
+        --m_chunkSizeIndex;
+        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 '.' 키) ----
+void LodControlComponent::IncreaseChunkSize()
+{
+    if (m_chunkSizeIndex < kChunkSizeStepCount - 1)
+    {
+        ++m_chunkSizeIndex;
+        m_terrain->SetLodChunkSize(kChunkSizeSteps[m_chunkSizeIndex]);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 ';' 키) ----
+// 거리는 인덱스를 다시 만들지 않으므로 누르고 있는 동안 계속 반응해도 부담이 없다
+// (버튼도 SetRepeatWhileHeld(true) 로 등록해서 누르고 있으면 계속 반응한다).
+void LodControlComponent::DecreaseBaseDistance()
+{
+    m_baseDistance = std::max(m_baseDistance / kBaseDistanceFactor, kMinBaseDistance);
+    m_terrain->SetLodBaseDistance(m_baseDistance);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 '\'' 키) ----
+void LodControlComponent::IncreaseBaseDistance()
+{
+    m_baseDistance = std::min(m_baseDistance * kBaseDistanceFactor, kMaxBaseDistance);
+    m_terrain->SetLodBaseDistance(m_baseDistance);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 U 키) ----
+void LodControlComponent::DecreaseLevelCount()
+{
+    if (m_levelCount > kMinLevelCount)
+    {
+        --m_levelCount;
+        m_terrain->SetLodLevelCount(m_levelCount);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 I 키) ----
+void LodControlComponent::IncreaseLevelCount()
+{
+    if (m_levelCount < kMaxLevelCount)
+    {
+        ++m_levelCount;
+        m_terrain->SetLodLevelCount(m_levelCount);
+        RefreshInfoText();
+    }
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void LodControlComponent::ResetToDefault()
+{
+    m_chunkSizeIndex = kDefaultChunkSizeIndex;
+    m_levelCount = kDefaultLevelCount;
+    m_baseDistance = kDefaultBaseDistance;
+    m_lodEnabled = true;
+    m_colorMode = true;
+    m_frozen = false;
+    m_neighborClamp = false;
+    m_cullingEnabled = true;
+    m_debugBoxesEnabled = false;
+    ApplyAll();
+    RefreshInfoText();
 }
 
 std::wstring LodControlComponent::FormatThousands(size_t value)
@@ -242,8 +265,7 @@ void LodControlComponent::RefreshInfoText()
     wchar_t buffer[900] = {};
 
     std::swprintf(buffer, 900,
-        L"[거리 LOD]  LOD L   색상 K   프리즈 F   이웃제한 J\n"
-        L"           컬링 C   박스 B   청크 , / .   거리 ; / '   레벨수 U / I   기본값 0\n"
+        L"[거리 LOD]\n"
         L"청크 : %d x %d 셀   %zu 개 중 %zu 개 그림   레벨 수 : %d\n"
         L"기준 거리 : %.0f   레벨 경계 : %s\n"
         L"레벨별 청크 : %s\n"

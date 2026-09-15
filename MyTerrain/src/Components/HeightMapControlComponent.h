@@ -15,10 +15,9 @@
 //
 //   위 / 아래        조절할 항목 선택
 //   왼쪽 / 오른쪽    선택한 항목 값 조절 (누르고 있으면 연속)
-//   N                다음 높이맵 파일
-//   C                고도 색상 모드 (GPU 텍스처를 읽어 고도별로 색칠)
-//   F5               폴더 다시 훑고 현재 파일 다시 읽기 (편집 프로그램에서 저장한 뒤 확인용)
-//   0                기본값 복귀
+//
+// 그 외(다음 높이맵 파일 / 고도 색상 모드 / 폴더 다시 읽기 / 기본값 복귀)는 화면의
+// 버튼으로 조작한다 (NextFile / ToggleHeightColorMode / ReloadFiles / ResetToDefault).
 //
 // HUD 에는 이미지의 해상도·비트 심도·계조 단계 수와, 텍셀 간격이 셀 크기와 견주어
 // 어느 쪽이 촘촘한지를 함께 띄운다. 높이맵 지형에서 결과를 좌우하는 것이 결국
@@ -48,6 +47,12 @@ public:
 
     // TerrainRenderer 에 넘길 높이 함수 (Start 에서 자동으로 연결된다)
     GridMesh::HeightFunc MakeHeightFunction();
+
+    // ---- 버튼용 동작 (예전에는 각각 N / C / F5 / 0 키였다) ----
+    void NextFile();
+    void ToggleHeightColorMode();
+    void ReloadFiles();
+    void ResetToDefault();
 
 protected:
     void RefreshInfoText() override;

@@ -14,15 +14,12 @@ class UIText;
 // 그 값을 읽어 TerrainRenderer 에 그대로 전달한다(도메인 셰이더가 displacement 할 때
 // 0~1 값을 월드 높이로 바꾸는 데 그 값이 필요하다).
 //
-//   H        디스플레이스먼트 켬/끔 (끄면 컨트롤 포인트 4개를 쌍선형 보간만 한 매끈한 패치)
-//   J        파티션 모드 전환 (integer <-> fractional_odd)
-//   V        팩터 시각화 (파랑 = 최소, 빨강 = 최대)
-//   F        프리즈 (지금 위치를 팩터 계산 기준점으로 고정 -- 패치 경계까지 날아가서 관찰용)
-//   X        절두체 컬링 켬/끔
-//   B        패치 경계 박스 표시 켬/끔
-//   O / P    최대 팩터 줄이기 / 늘리기 (1 ~ 64)
-//   ; / '    기준 거리 줄이기 / 늘리기
-//   0        기본값으로 복귀 (이 컴포넌트가 다루는 값만)
+// 아래는 전부 화면 버튼으로 조작한다.
+//   디스플레이스먼트 켬/끔(끄면 컨트롤 포인트 4개를 쌍선형 보간만 한 매끈한 패치) /
+//   파티션 모드 전환(integer <-> fractional_odd) / 팩터 시각화(파랑 = 최소, 빨강 = 최대) /
+//   프리즈(지금 위치를 팩터 계산 기준점으로 고정 -- 패치 경계까지 날아가서 관찰용) /
+//   절두체 컬링 / 패치 경계 박스 표시 / 최대 팩터 조절(1 ~ 64) / 기준 거리 조절 /
+//   기본값 복귀 (이 컴포넌트가 다루는 값만)
 class TessellationControlComponent : public Component
 {
 public:
@@ -32,6 +29,19 @@ public:
     void SetTarget(TerrainRenderer* terrain) { m_terrain = terrain; }
     void SetHeightMapControl(HeightMapControlComponent* control) { m_heightMapControl = control; }
     void SetInfoText(UIText* infoText) { m_infoText = infoText; }
+
+    // ---- 버튼용 동작 (예전에는 각각 H / J / V / F / X / B / O / P / ; / ' / 0 키였다) ----
+    void ToggleDisplacement();
+    void TogglePartitionMode();
+    void ToggleFactorColorMode();
+    void ToggleFrozen();
+    void ToggleCulling();
+    void ToggleDebugBoxes();
+    void DecreaseMaxFactor();
+    void IncreaseMaxFactor();
+    void DecreaseBaseDistance();   // 누르고 있으면 연속으로 줄어든다
+    void IncreaseBaseDistance();   // 누르고 있으면 연속으로 늘어난다
+    void ResetToDefault();
 
 private:
     void ApplyAll();

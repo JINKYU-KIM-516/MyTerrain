@@ -1,7 +1,6 @@
 ﻿#include "SkyControlComponent.h"
 #include "../Terrain/SkyRenderer.h"
 #include "../UI/UIText.h"
-#include "../Framework/InputManager.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -27,89 +26,9 @@ void SkyControlComponent::Update(float deltaTime)
         return;
     }
 
-    InputManager& input = InputManager::GetInstance();
+    // 시간 스크럽 / 자동 재생 켬끔 / 프리셋 순환 / 태양 각크기 / 글로우 / 기본값은
+    // 전부 화면 버튼(StepTimeBackward 등)으로 옮겨졌다. 여기서는 자동 재생만 흐른다.
 
-    if (input.IsKeyPressed('T'))
-    {
-        m_autoPlay = !m_autoPlay;
-    }
-
-    if (input.IsKeyPressed('Y'))
-    {
-        m_presetIndex = (m_presetIndex + 1) % kPresetCount;
-        m_autoPlay = false;
-        m_sky->SetTimeOfDay(kPresets[m_presetIndex]);
-    }
-
-    if (input.IsKeyPressed('I'))
-    {
-        m_sky->SetSunAngularRadius(m_sky->GetSunAngularRadiusDegrees() * 0.8f);
-    }
-    if (input.IsKeyPressed('K'))
-    {
-        m_sky->SetSunAngularRadius(m_sky->GetSunAngularRadiusDegrees() * 1.25f);
-    }
-
-    // 지수를 키우면 sunGlow = sunDot^지수 가 더 좁고 진해지므로 "약하게(좁게)",
-    // 줄이면 더 넓고 은은해지므로 "강하게(넓게)" 로 안내 문구를 붙였다 (Sky.hlsl 참고).
-    if (input.IsKeyPressed('U'))
-    {
-        m_sky->SetSunGlowExponent(m_sky->GetSunGlowExponent() * 1.3f);
-    }
-    if (input.IsKeyPressed('J'))
-    {
-        m_sky->SetSunGlowExponent(m_sky->GetSunGlowExponent() * 0.77f);
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_autoPlay = false;
-        m_presetIndex = 2;
-        m_sky->SetTimeOfDay(0.5f);
-        m_sky->SetSunAngularRadius(1.5f);
-        m_sky->SetSunGlowExponent(32.0f);
-    }
-
-    // ---- , / . 로 시간 스크럽 (누르고 있으면 연속 -- GridControlComponent 와 같은 패턴) ----
-    const bool scrubBack = input.IsKeyDown(VK_OEM_COMMA);      // ','
-    const bool scrubForward = input.IsKeyDown(VK_OEM_PERIOD);  // '.'
-    const int direction = scrubForward ? 1 : (scrubBack ? -1 : 0);
-
-    if (direction != m_repeatDirection)
-    {
-        m_repeatDirection = direction;
-        m_repeatTimer = 0.0f;
-        m_repeatStarted = false;
-    }
-
-    if (direction != 0)
-    {
-        bool shouldStep = false;
-
-        if (!m_repeatStarted)
-        {
-            shouldStep = true;
-            m_repeatStarted = true;
-            m_repeatTimer = kRepeatDelay;
-        }
-        else
-        {
-            m_repeatTimer -= deltaTime;
-            if (m_repeatTimer <= 0.0f)
-            {
-                shouldStep = true;
-                m_repeatTimer = kRepeatInterval;
-            }
-        }
-
-        if (shouldStep)
-        {
-            m_autoPlay = false;
-            m_sky->SetTimeOfDay(m_sky->GetTimeOfDay() + kScrubStep * static_cast<float>(direction));
-        }
-    }
-
-    // ---- 자동 재생 ----
     if (m_autoPlay)
     {
         m_sky->SetTimeOfDay(m_sky->GetTimeOfDay() + kAutoPlaySpeed * deltaTime);
@@ -122,6 +41,119 @@ void SkyControlComponent::Update(float deltaTime)
         m_refreshTimer = kRefreshInterval;
         RefreshInfoText();
     }
+}
+
+// ---- 버튼용 동작 (예전 ',' 키. 버튼도 SetRepeatWhileHeld(true) 로 등록한다) ----
+void SkyControlComponent::StepTimeBackward()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_autoPlay = false;
+    m_sky->SetTimeOfDay(m_sky->GetTimeOfDay() - kScrubStep);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 '.' 키) ----
+void SkyControlComponent::StepTimeForward()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_autoPlay = false;
+    m_sky->SetTimeOfDay(m_sky->GetTimeOfDay() + kScrubStep);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 T 키) ----
+void SkyControlComponent::ToggleAutoPlay()
+{
+    m_autoPlay = !m_autoPlay;
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 Y 키) ----
+void SkyControlComponent::CyclePreset()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_presetIndex = (m_presetIndex + 1) % kPresetCount;
+    m_autoPlay = false;
+    m_sky->SetTimeOfDay(kPresets[m_presetIndex]);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 I 키) ----
+void SkyControlComponent::DecreaseSunSize()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_sky->SetSunAngularRadius(m_sky->GetSunAngularRadiusDegrees() * 0.8f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 K 키) ----
+void SkyControlComponent::IncreaseSunSize()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_sky->SetSunAngularRadius(m_sky->GetSunAngularRadiusDegrees() * 1.25f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 U 키) ----
+// 지수를 키우면 sunGlow = sunDot^지수 가 더 좁고 진해지므로 "약하게(좁게)" (Sky.hlsl 참고).
+void SkyControlComponent::IncreaseGlowExponent()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_sky->SetSunGlowExponent(m_sky->GetSunGlowExponent() * 1.3f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 J 키) ----
+// 지수를 줄이면 더 넓고 은은해지므로 "강하게(넓게)".
+void SkyControlComponent::DecreaseGlowExponent()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_sky->SetSunGlowExponent(m_sky->GetSunGlowExponent() * 0.77f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void SkyControlComponent::ResetToDefault()
+{
+    if (m_sky == nullptr)
+    {
+        return;
+    }
+
+    m_autoPlay = false;
+    m_presetIndex = 2;
+    m_sky->SetTimeOfDay(0.5f);
+    m_sky->SetSunAngularRadius(1.5f);
+    m_sky->SetSunGlowExponent(32.0f);
+    RefreshInfoText();
 }
 
 void SkyControlComponent::RefreshInfoText()

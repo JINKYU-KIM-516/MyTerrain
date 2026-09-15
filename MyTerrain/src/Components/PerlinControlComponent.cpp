@@ -125,6 +125,40 @@ void PerlinControlComponent::ApplyParamChange()
     }
 }
 
+// ---- 버튼용 동작 (예전 N 키) ----
+void PerlinControlComponent::CycleNoiseType()
+{
+    const int typeCount = static_cast<int>(Noise::Type::Count);
+    m_params.type = static_cast<Noise::Type>((static_cast<int>(m_params.type) + 1) % typeCount);
+    m_selected = ParamId::Type;
+
+    ApplyParamChange();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 M 키) ----
+void PerlinControlComponent::RandomizeSeed()
+{
+    // 실행할 때마다 다른 시드가 나오도록 시각으로 초기화한 난수기를 쓴다
+    static std::mt19937 rng(static_cast<unsigned int>(
+        std::chrono::steady_clock::now().time_since_epoch().count()));
+
+    m_params.seed = rng();
+    m_selected = ParamId::Seed;
+
+    ApplyParamChange();
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void PerlinControlComponent::ResetToDefault()
+{
+    m_params = m_defaultParams;
+
+    ApplyParamChange();
+    RefreshInfoText();
+}
+
 void PerlinControlComponent::Update(float deltaTime)
 {
     // 분할 수(+/-), 셀 크기([ / ]), 표시 모드(Tab) 는 부모가 처리한다
@@ -170,31 +204,8 @@ void PerlinControlComponent::Update(float deltaTime)
         paramChanged = true;
     }
 
-    // ---------------- 단축키 ----------------
-    if (input.IsKeyPressed('N'))
-    {
-        const int typeCount = static_cast<int>(Noise::Type::Count);
-        m_params.type = static_cast<Noise::Type>((static_cast<int>(m_params.type) + 1) % typeCount);
-        m_selected = ParamId::Type;
-        paramChanged = true;
-    }
-
-    if (input.IsKeyPressed('M'))
-    {
-        // 실행할 때마다 다른 시드가 나오도록 시각으로 초기화한 난수기를 쓴다
-        static std::mt19937 rng(static_cast<unsigned int>(
-            std::chrono::steady_clock::now().time_since_epoch().count()));
-
-        m_params.seed = rng();
-        m_selected = ParamId::Seed;
-        paramChanged = true;
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_params = m_defaultParams;
-        paramChanged = true;
-    }
+    // 합성 방식 전환 / 시드 무작위 / 기본값 복귀는 화면 버튼(CycleNoiseType /
+    // RandomizeSeed / ResetToDefault)으로 옮겨졌다.
 
     if (paramChanged)
     {

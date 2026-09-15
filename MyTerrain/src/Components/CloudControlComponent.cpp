@@ -2,7 +2,6 @@
 #include "../Terrain/CloudRenderer.h"
 #include "../Terrain/SkyRenderer.h"
 #include "../UI/UIText.h"
-#include "../Framework/InputManager.h"
 #include <sstream>
 #include <iomanip>
 
@@ -18,8 +17,6 @@ void CloudControlComponent::Update(float deltaTime)
         return;
     }
 
-    InputManager& input = InputManager::GetInstance();
-
     // ---- 스카이 시간대 동기화 (SkyRenderer 는 건드리지 않고 값만 읽어온다) ----
     if (m_sky != nullptr)
     {
@@ -27,53 +24,8 @@ void CloudControlComponent::Update(float deltaTime)
         m_cloud->SetSunElevationDegrees(m_sky->GetSunElevationDegrees());
     }
 
-    if (input.IsKeyPressed('L'))
-    {
-        m_visible = !m_visible;
-        m_cloud->SetEnabled(m_visible);
-    }
-
-    // 임계값을 올리면(G) fbm 밀도가 넘기 어려워져서 구름이 적어지고,
-    // 내리면(H) 더 쉽게 넘어서 구름이 많아진다.
-    if (input.IsKeyPressed('G'))
-    {
-        m_cloud->SetCoverage(m_cloud->GetCoverage() + 0.03f);
-    }
-    if (input.IsKeyPressed('H'))
-    {
-        m_cloud->SetCoverage(m_cloud->GetCoverage() - 0.03f);
-    }
-
-    if (input.IsKeyPressed('V'))
-    {
-        m_cloud->SetWarpStrength(m_cloud->GetWarpStrength() * 0.8f);
-    }
-    if (input.IsKeyPressed('B'))
-    {
-        m_cloud->SetWarpStrength(m_cloud->GetWarpStrength() * 1.25f);
-    }
-
-    if (input.IsKeyPressed('O'))
-    {
-        m_cloud->SetWindSpeed(m_cloud->GetWindSpeed() * 0.7f);
-    }
-    if (input.IsKeyPressed('P'))
-    {
-        m_cloud->SetWindSpeed(m_cloud->GetWindSpeed() * 1.4f);
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_visible = true;
-        m_cloud->SetEnabled(true);
-        m_cloud->SetCoverage(0.55f);
-        m_cloud->SetSoftness(0.08f);
-        m_cloud->SetNoiseScale(2.2f);
-        m_cloud->SetWarpStrength(1.6f);
-        m_cloud->SetWindDirectionDegrees(35.0f);
-        m_cloud->SetWindSpeed(0.05f);
-        m_cloud->SetRimPower(4.0f);
-    }
+    // 조작(표시 켬/끔, 커버리지, 워프 세기, 바람 속도, 기본값)은 전부 화면 버튼으로
+    // 옮겨졌다.
 
     // ---- HUD 갱신 ----
     m_refreshTimer -= deltaTime;
@@ -82,6 +34,113 @@ void CloudControlComponent::Update(float deltaTime)
         m_refreshTimer = kRefreshInterval;
         RefreshInfoText();
     }
+}
+
+// ---- 버튼용 동작 (예전 L 키) ----
+void CloudControlComponent::ToggleVisible()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_visible = !m_visible;
+    m_cloud->SetEnabled(m_visible);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 G 키) ----
+// 임계값을 올리면 fbm 밀도가 넘기 어려워져서 구름이 적어진다.
+void CloudControlComponent::IncreaseCoverage()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_cloud->SetCoverage(m_cloud->GetCoverage() + 0.03f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 H 키) ----
+// 임계값을 내리면 더 쉽게 넘어서 구름이 많아진다.
+void CloudControlComponent::DecreaseCoverage()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_cloud->SetCoverage(m_cloud->GetCoverage() - 0.03f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 V 키) ----
+void CloudControlComponent::DecreaseWarpStrength()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_cloud->SetWarpStrength(m_cloud->GetWarpStrength() * 0.8f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 B 키) ----
+void CloudControlComponent::IncreaseWarpStrength()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_cloud->SetWarpStrength(m_cloud->GetWarpStrength() * 1.25f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 O 키) ----
+void CloudControlComponent::DecreaseWindSpeed()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_cloud->SetWindSpeed(m_cloud->GetWindSpeed() * 0.7f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 P 키) ----
+void CloudControlComponent::IncreaseWindSpeed()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_cloud->SetWindSpeed(m_cloud->GetWindSpeed() * 1.4f);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void CloudControlComponent::ResetToDefault()
+{
+    if (m_cloud == nullptr)
+    {
+        return;
+    }
+
+    m_visible = true;
+    m_cloud->SetEnabled(true);
+    m_cloud->SetCoverage(0.55f);
+    m_cloud->SetSoftness(0.08f);
+    m_cloud->SetNoiseScale(2.2f);
+    m_cloud->SetWarpStrength(1.6f);
+    m_cloud->SetWindDirectionDegrees(35.0f);
+    m_cloud->SetWindSpeed(0.05f);
+    m_cloud->SetRimPower(4.0f);
+    RefreshInfoText();
 }
 
 void CloudControlComponent::RefreshInfoText()

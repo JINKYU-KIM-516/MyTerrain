@@ -1,6 +1,5 @@
 ﻿#include "TessellationControlComponent.h"
 #include "HeightMapControlComponent.h"
-#include "../Framework/InputManager.h"
 #include "../Terrain/TerrainRenderer.h"
 #include "../UI/UIText.h"
 
@@ -64,98 +63,110 @@ void TessellationControlComponent::Update(float deltaTime)
 
     SyncHeightMapScale();
 
-    InputManager& input = InputManager::GetInstance();
-    bool changed = false;
-
-    if (input.IsKeyPressed('H'))
-    {
-        m_displacementEnabled = !m_displacementEnabled;
-        m_terrain->SetTessDisplacementEnabled(m_displacementEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('J'))
-    {
-        m_fractionalPartitioning = !m_fractionalPartitioning;
-        m_terrain->SetTessFractionalPartitioning(m_fractionalPartitioning);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('V'))
-    {
-        m_factorColorMode = !m_factorColorMode;
-        m_terrain->SetTessFactorColorMode(m_factorColorMode);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('F'))
-    {
-        m_frozen = !m_frozen;
-        m_terrain->SetTessFrozen(m_frozen);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('X'))
-    {
-        m_frustumCullingEnabled = !m_frustumCullingEnabled;
-        m_terrain->SetTessFrustumCullingEnabled(m_frustumCullingEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('B'))
-    {
-        m_debugBoxesEnabled = !m_debugBoxesEnabled;
-        m_terrain->SetTessDebugBoxesEnabled(m_debugBoxesEnabled);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('O'))
-    {
-        m_maxFactor = std::max(m_maxFactor - kFactorStep, m_minFactor);
-        m_terrain->SetTessFactorRange(m_minFactor, m_maxFactor);
-        changed = true;
-    }
-    if (input.IsKeyPressed('P'))
-    {
-        m_maxFactor = std::min(m_maxFactor + kFactorStep, 64.0f);
-        m_terrain->SetTessFactorRange(m_minFactor, m_maxFactor);
-        changed = true;
-    }
-
-    if (input.IsKeyDown(VK_OEM_1))          // ';'
-    {
-        m_baseDistance = std::max(m_baseDistance / kBaseDistanceFactor, kMinBaseDistance);
-        m_terrain->SetTessBaseDistance(m_baseDistance);
-        changed = true;
-    }
-    if (input.IsKeyDown(VK_OEM_7))          // '\''
-    {
-        m_baseDistance = std::min(m_baseDistance * kBaseDistanceFactor, kMaxBaseDistance);
-        m_terrain->SetTessBaseDistance(m_baseDistance);
-        changed = true;
-    }
-
-    if (input.IsKeyPressed('0') || input.IsKeyPressed(VK_NUMPAD0))
-    {
-        m_baseDistance = kDefaultBaseDistance;
-        m_minFactor = kDefaultMinFactor;
-        m_maxFactor = kDefaultMaxFactor;
-        m_displacementEnabled = true;
-        m_fractionalPartitioning = true;
-        m_factorColorMode = false;
-        m_frustumCullingEnabled = true;
-        m_debugBoxesEnabled = false;
-        m_frozen = false;
-        ApplyAll();
-        changed = true;
-    }
+    // 조작은 전부 화면 버튼으로 옮겨졌다.
 
     m_refreshTimer += deltaTime;
-    if (changed || m_refreshTimer >= kRefreshInterval)
+    if (m_refreshTimer >= kRefreshInterval)
     {
         m_refreshTimer = 0.0f;
         RefreshInfoText();
     }
+}
+
+// ---- 버튼용 동작 (예전 H 키) ----
+void TessellationControlComponent::ToggleDisplacement()
+{
+    m_displacementEnabled = !m_displacementEnabled;
+    m_terrain->SetTessDisplacementEnabled(m_displacementEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 J 키) ----
+void TessellationControlComponent::TogglePartitionMode()
+{
+    m_fractionalPartitioning = !m_fractionalPartitioning;
+    m_terrain->SetTessFractionalPartitioning(m_fractionalPartitioning);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 V 키) ----
+void TessellationControlComponent::ToggleFactorColorMode()
+{
+    m_factorColorMode = !m_factorColorMode;
+    m_terrain->SetTessFactorColorMode(m_factorColorMode);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 F 키) ----
+void TessellationControlComponent::ToggleFrozen()
+{
+    m_frozen = !m_frozen;
+    m_terrain->SetTessFrozen(m_frozen);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 X 키) ----
+void TessellationControlComponent::ToggleCulling()
+{
+    m_frustumCullingEnabled = !m_frustumCullingEnabled;
+    m_terrain->SetTessFrustumCullingEnabled(m_frustumCullingEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 B 키) ----
+void TessellationControlComponent::ToggleDebugBoxes()
+{
+    m_debugBoxesEnabled = !m_debugBoxesEnabled;
+    m_terrain->SetTessDebugBoxesEnabled(m_debugBoxesEnabled);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 O 키) ----
+void TessellationControlComponent::DecreaseMaxFactor()
+{
+    m_maxFactor = std::max(m_maxFactor - kFactorStep, m_minFactor);
+    m_terrain->SetTessFactorRange(m_minFactor, m_maxFactor);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 P 키) ----
+void TessellationControlComponent::IncreaseMaxFactor()
+{
+    m_maxFactor = std::min(m_maxFactor + kFactorStep, 64.0f);
+    m_terrain->SetTessFactorRange(m_minFactor, m_maxFactor);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 ';' 키. 버튼도 SetRepeatWhileHeld(true) 로 등록한다) ----
+void TessellationControlComponent::DecreaseBaseDistance()
+{
+    m_baseDistance = std::max(m_baseDistance / kBaseDistanceFactor, kMinBaseDistance);
+    m_terrain->SetTessBaseDistance(m_baseDistance);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 '\'' 키) ----
+void TessellationControlComponent::IncreaseBaseDistance()
+{
+    m_baseDistance = std::min(m_baseDistance * kBaseDistanceFactor, kMaxBaseDistance);
+    m_terrain->SetTessBaseDistance(m_baseDistance);
+    RefreshInfoText();
+}
+
+// ---- 버튼용 동작 (예전 0 키) ----
+void TessellationControlComponent::ResetToDefault()
+{
+    m_baseDistance = kDefaultBaseDistance;
+    m_minFactor = kDefaultMinFactor;
+    m_maxFactor = kDefaultMaxFactor;
+    m_displacementEnabled = true;
+    m_fractionalPartitioning = true;
+    m_factorColorMode = false;
+    m_frustumCullingEnabled = true;
+    m_debugBoxesEnabled = false;
+    m_frozen = false;
+    ApplyAll();
+    RefreshInfoText();
 }
 
 std::wstring TessellationControlComponent::FormatThousands(size_t value)
@@ -199,9 +210,7 @@ void TessellationControlComponent::RefreshInfoText()
     wchar_t buffer[900] = {};
 
     std::swprintf(buffer, 900,
-        L"[하드웨어 테셀레이션]  디스플레이스먼트 H   파티션 모드 J   팩터 시각화 V\n"
-        L"                       프리즈 F   컬링 X   패치 박스 B\n"
-        L"                       최대 팩터 O / P   기준 거리 ; / '   기본값 0\n"
+        L"[하드웨어 테셀레이션]\n"
         L"디스플레이스먼트 %s   파티션 모드 %s   팩터 시각화 %s\n"
         L"패치 : 전체 %s 개 중 %s 개 그림   추정 삼각형 : %s 개\n"
         L"팩터 범위 : %.0f ~ %.0f   기준 거리 : %.0f\n"

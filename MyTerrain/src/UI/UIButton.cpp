@@ -23,7 +23,14 @@ void UIButton::Update(float deltaTime)
         SetUnderline(m_hovered);
     }
 
-    if (m_hovered && input.IsMouseButtonPressed(MouseButton::Left))
+    // 기본은 클릭 순간(Pressed)에 1회만 반응하고, m_repeatWhileHeld 가 켜져 있으면
+    // 누르고 있는 동안(Down) 매 프레임 반응한다 -- 키보드를 누르고 있으면 계속
+    // 반응하던 조작(값 연속 조절 등)을 버튼으로 옮길 때 쓴다.
+    const bool triggered = m_repeatWhileHeld
+        ? input.IsMouseButtonDown(MouseButton::Left)
+        : input.IsMouseButtonPressed(MouseButton::Left);
+
+    if (m_hovered && triggered)
     {
         if (m_onClick)
         {
