@@ -68,4 +68,25 @@ namespace GridMesh
     //   cellSize                : 셀 한 칸의 크기
     MeshData Generate(int divisionsX, int divisionsZ, float cellSize,
                       const HeightFunc& heightFunc = nullptr);
+
+    // 10번 무한 지형 청크용 생성. Generate 와 두 가지가 다르다.
+    //
+    // 1) 높이 함수에 "월드 좌표"를 넘긴다
+    //    정점 위치 자체는 Generate 와 똑같이 원점 중심으로 만들어진다(청크의 배치는
+    //    GameObject 의 Transform 이 아니라 InfiniteTerrainRenderer 가 상수 버퍼에
+    //    넣어주는 월드 행렬이 담당한다). 대신 높이만은 worldOffset 을 더한 좌표에서
+    //    평가하므로, 이웃 청크의 맞닿은 정점은 같은 월드 좌표를 넣게 되어 값이 정확히
+    //    같아진다 -- 펄린이 결정적이기 때문에 이것만으로 위치 이음매가 사라진다.
+    //
+    // 2) 테두리 바깥 한 칸을 실제로 더 샘플링해서 법선을 구한다 (apron)
+    //    Generate 는 격자 끝에서 이웃 높이를 clamp 해서 쓴다. 한 장짜리 지형에서는
+    //    가장자리가 화면 밖이라 문제가 없지만, 청크로 쪼개면 그 "가장자리"가 청크마다
+    //    생기므로 경계선을 따라 조명이 한 줄 어긋난다(위치는 붙었는데 접힌 자국처럼
+    //    보이는 현상). 여유 칸을 진짜 높이로 채우면 경계 정점도 바깥 이웃을 보고
+    //    중앙 차분을 계산하므로 법선까지 매끄럽게 이어진다.
+    //    비용은 정점 수가 (n+1)^2 -> (n+3)^2 로 늘어나는 만큼의 높이 함수 호출뿐이고,
+    //    GPU 로 올라가는 정점은 그대로 (n+1)^2 이다 (여유 칸은 법선용으로만 쓰고 버린다).
+    MeshData GenerateChunk(int divisionsX, int divisionsZ, float cellSize,
+                           const HeightFunc& heightFunc,
+                           float worldOffsetX, float worldOffsetZ);
 }

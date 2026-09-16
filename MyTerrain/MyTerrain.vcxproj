@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -152,6 +152,10 @@
     <ClCompile Include="src\Terrain\CloudRenderer.cpp" />
     <ClCompile Include="src\Components\CloudControlComponent.cpp" />
     <ClCompile Include="src\App\Techniques\Technique09_Clouds.cpp" />
+    <ClCompile Include="src\Terrain\ChunkGrid.cpp" />
+    <ClCompile Include="src\Terrain\InfiniteTerrainRenderer.cpp" />
+    <ClCompile Include="src\Components\InfiniteControlComponent.cpp" />
+    <ClCompile Include="src\App\Techniques\Technique10_InfiniteChunks.cpp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -208,6 +212,10 @@
     <ClInclude Include="src\Terrain\CloudRenderer.h" />
     <ClInclude Include="src\Components\CloudControlComponent.h" />
     <ClInclude Include="src\App\Techniques\Technique09_Clouds.h" />
+    <ClInclude Include="src\Terrain\ChunkGrid.h" />
+    <ClInclude Include="src\Terrain\InfiniteTerrainRenderer.h" />
+    <ClInclude Include="src\Components\InfiniteControlComponent.h" />
+    <ClInclude Include="src\App\Techniques\Technique10_InfiniteChunks.h" />
   </ItemGroup>
 
   <!-- HLSL 은 실행 중에 D3DCompileFromFile 로 컴파일하므로
@@ -216,6 +224,7 @@
     <None Include="shaders\BasicTerrain.hlsl" />
     <None Include="shaders\Sky.hlsl" />
     <None Include="shaders\Cloud.hlsl" />
+    <None Include="shaders\InfiniteTerrain.hlsl" />
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -12,6 +12,7 @@
 #include "App/Techniques/Technique07_Tessellation.h"
 #include "App/Techniques/Technique08_Sky.h"
 #include "App/Techniques/Technique09_Clouds.h"
+#include "App/Techniques/Technique10_InfiniteChunks.h"
 
 // ------------------------------------------------------------
 // Terrain Showcase System - 진입점
@@ -70,6 +71,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     app.RegisterTechnique(L"하드웨어 테셀레이션 지형", L"Hardware Tessellation", &BuildTessellationScene, L"7");
     app.RegisterTechnique(L"스카이맵", L"SkyDome", &BuildSkyScene, L"8");
     app.RegisterTechnique(L"동적 왜곡 구름", L"Perturbed Clouds", &BuildCloudScene, L"9");
+    app.RegisterTechnique(L"무한 지형 청크", L"Infinite Chunks", &BuildInfiniteChunksScene, L"10");
     // ...
 
     // 메뉴 화면 구성
